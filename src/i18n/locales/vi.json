@@ -1,0 +1,45 @@
+{
+  "common": {
+    "login": "Đăng nhập",
+    "logout": "Đăng xuất",
+    "dashboard": "Bảng điều khiển",
+    "pets": "Thú cưng",
+    "customers": "Khách hàng",
+    "appointments": "Lịch hẹn",
+    "staff_login": "Nhân viên đăng nhập",
+    "book_appointment": "Đặt lịch hẹn",
+    "learn_more": "Tìm hiểu thêm",
+    "search_placeholder": "Tìm kiếm thú cưng, chủ sở hữu..."
+  },
+  "landing": {
+    "hero_badge": "Dịch vụ thú y tốt nhất khu vực",
+    "hero_title": "Chúng tôi chăm sóc <1>Thú cưng</1> như gia đình.",
+    "hero_subtitle": "Dịch vụ thú y chuyên nghiệp từ tâm. Từ kiểm tra định kỳ đến phẫu thuật nâng cao, chúng tôi cung cấp sự chăm sóc tốt nhất cho thú cưng của bạn.",
+    "happy_clients": "Khách hàng hài lòng",
+    "services_title": "Dịch vụ cao cấp",
+    "services_subtitle": "Chúng tôi cung cấp nhiều loại dịch vụ thú y để giữ cho thú cưng của bạn luôn khỏe mạnh và hạnh phúc.",
+    "feature_expert_title": "Chăm sóc chuyên gia",
+    "feature_expert_desc": "Các bác sĩ thú y giàu kinh nghiệm tận tâm vì sức khỏe thú cưng của bạn.",
+    "feature_emergency_title": "Cấp cứu 24/7",
+    "feature_emergency_desc": "Chúng tôi luôn sẵn sàng khi thú cưng của bạn cần hỗ trợ y tế khẩn cấp.",
+    "feature_booking_title": "Đặt lịch dễ dàng",
+    "feature_booking_desc": "Lên lịch hẹn trực tuyến chỉ với vài cú nhấp chuột.",
+    "feature_grooming_title": "Làm đẹp thú cưng",
+    "feature_grooming_desc": "Giữ cho thú cưng của bạn luôn trông đẹp nhất với dịch vụ làm đẹp chuyên nghiệp.",
+    "footer_desc": "Cung cấp dịch vụ chăm sóc thú y chất lượng từ năm 2010. Thú cưng của bạn xứng đáng với điều tốt nhất.",
+    "contact_us": "Liên hệ",
+    "newsletter": "Bản tin",
+    "newsletter_desc": "Nhận mẹo chăm sóc thú cưng và cập nhật từ phòng khám.",
+    "join": "Tham gia",
+    "rights": "Bảo lưu mọi quyền."
+  },
+  "login": {
+    "welcome": "Chào mừng đến với PetCare",
+    "subtitle": "Vui lòng đăng nhập vào tài khoản của bạn",
+    "email": "Địa chỉ Email",
+    "password": "Mật khẩu",
+    "sign_in": "Đăng nhập",
+    "no_account": "Chưa có tài khoản?",
+    "contact_admin": "Liên hệ quản trị viên"
+  }
+}

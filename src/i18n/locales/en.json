@@ -1,0 +1,45 @@
+{
+  "common": {
+    "login": "Login",
+    "logout": "Logout",
+    "dashboard": "Dashboard",
+    "pets": "Pets",
+    "customers": "Customers",
+    "appointments": "Appointments",
+    "staff_login": "Staff Login",
+    "book_appointment": "Book Appointment",
+    "learn_more": "Learn More",
+    "search_placeholder": "Search pets, owners..."
+  },
+  "landing": {
+    "hero_badge": "Best Veterinary Care in Town",
+    "hero_title": "We Care for Your <1>Furry Friends</1> Like Family.",
+    "hero_subtitle": "Professional veterinary services with a heart. From routine check-ups to advanced surgeries, we provide the best care for your pets.",
+    "happy_clients": "Happy Clients",
+    "services_title": "Our Premium Services",
+    "services_subtitle": "We offer a wide range of veterinary services to keep your pets healthy and happy.",
+    "feature_expert_title": "Expert Care",
+    "feature_expert_desc": "Highly experienced veterinarians dedicated to your pet's health.",
+    "feature_emergency_title": "24/7 Emergency",
+    "feature_emergency_desc": "We are always available when your pet needs urgent medical attention.",
+    "feature_booking_title": "Easy Booking",
+    "feature_booking_desc": "Schedule appointments online with just a few clicks.",
+    "feature_grooming_title": "Pet Grooming",
+    "feature_grooming_desc": "Keep your pets looking their best with our professional grooming.",
+    "footer_desc": "Providing quality veterinary care since 2010. Your pets deserve the best.",
+    "contact_us": "Contact Us",
+    "newsletter": "Newsletter",
+    "newsletter_desc": "Get pet care tips and clinic updates.",
+    "join": "Join",
+    "rights": "All rights reserved."
+  },
+  "login": {
+    "welcome": "Welcome to PetCare",
+    "subtitle": "Please sign in to your account",
+    "email": "Email Address",
+    "password": "Password",
+    "sign_in": "Sign In",
+    "no_account": "Don't have an account?",
+    "contact_admin": "Contact admin"
+  }
+}
