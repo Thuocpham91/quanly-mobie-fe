@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Shield, Save, ChevronDown, Plus, Edit2, Trash2, X, Check,
-  AlertTriangle, Search, Users, MapPin, UserCheck, UserX, RefreshCw,
+  AlertTriangle, Search, Users, MapPin, UserCheck, UserX,
 } from 'lucide-react';
 import { getRoles, getPermissions, createRole, updateRole, deleteRole, assignUserBranchRole, removeUserFromBranch } from '../api/roles';
 import type { Role, Permission } from '../api/roles';
