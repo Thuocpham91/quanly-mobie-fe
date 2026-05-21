@@ -188,9 +188,6 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
     }
   }, [isNotesModalOpen, dailyNotesList]);
 
-  useEffect(() => {
-    setNotesText(currentNotesData.text);
-  }, [currentNotesData.text]);
 
   useEffect(() => {
     setRoomPrice(String(currentNotesData.roomPrice || 100000));
