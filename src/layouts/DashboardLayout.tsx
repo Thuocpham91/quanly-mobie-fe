@@ -40,6 +40,13 @@ const DashboardLayout: React.FC = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['Tổng quan', 'Bán hàng']));
+  const [toasts, setToasts] = useState<{
+    id: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+    message: string;
+    timestamp: string;
+    duration: number;
+  }[]>([]);
 
   const currentUser = React.useMemo(() => {
     const userStr = localStorage.getItem('user');
@@ -70,9 +77,23 @@ const DashboardLayout: React.FC = () => {
     if (token) {
       const socket = connectSocket(token);
       
-      socket.on('notification', (data) => {
-        // Just log for now. A toast UI can be added later.
+      socket.on('notification', (data: any) => {
         console.log('🔔 Notification Received:', data);
+        const type = data.type || 'info';
+        const message = data.message || 'Có thông báo mới';
+        
+        const id = Math.random().toString(36).substring(2, 9);
+        setToasts(prev => [...prev, {
+          id,
+          type: type as any,
+          message,
+          timestamp: new Date().toISOString(),
+          duration: 6000
+        }]);
+        
+        setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== id));
+        }, 6000);
       });
       
       return () => {
@@ -631,6 +652,171 @@ const DashboardLayout: React.FC = () => {
           <Outlet />
         </div>
       </main>
+
+      {/* Toast Notification Container */}
+      <div style={{
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
+        zIndex: 10000,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        pointerEvents: 'none',
+      }}>
+        <style>{`
+          @keyframes toast-slide-in {
+            from {
+              transform: translateX(120%) scale(0.9);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0) scale(1);
+              opacity: 1;
+            }
+          }
+          @keyframes toast-progress {
+            from {
+              width: 100%;
+            }
+            to {
+              width: 0%;
+            }
+          }
+        `}</style>
+        {toasts.map(toast => {
+          let accentColor = '#3b82f6';
+          let iconSvg = (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+          );
+
+          if (toast.type === 'success') {
+            accentColor = '#10b981';
+            iconSvg = (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+            );
+          } else if (toast.type === 'warning') {
+            accentColor = '#f59e0b';
+            iconSvg = (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            );
+          } else if (toast.type === 'error') {
+            accentColor = '#ef4444';
+            iconSvg = (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+            );
+          }
+
+          return (
+            <div 
+              key={toast.id}
+              style={{
+                width: '350px',
+                padding: '14px 16px',
+                borderRadius: '14px',
+                backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                border: '1px solid rgba(255, 255, 255, 0.45)',
+                backdropFilter: 'blur(12px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+                boxShadow: '0 10px 30px -5px rgba(2, 6, 23, 0.1), 0 1px 3px 0 rgba(0, 0, 0, 0.05)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                pointerEvents: 'auto',
+                animation: 'toast-slide-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Toast Icon Accent */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: `rgba(${toast.type === 'success' ? '16, 185, 129' : toast.type === 'warning' ? '245, 158, 11' : toast.type === 'error' ? '239, 68, 68' : '59, 130, 246'}, 0.1)`,
+                padding: '8px',
+                borderRadius: '10px',
+                flexShrink: 0,
+              }}>
+                {iconSvg}
+              </div>
+
+              {/* Toast Content */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: '0.8125rem',
+                  fontWeight: '500',
+                  color: '#94a3b8',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: '2px',
+                }}>
+                  {toast.type === 'success' ? 'Thành công' : toast.type === 'warning' ? 'Cảnh báo' : toast.type === 'error' ? 'Lỗi' : 'Thông báo'}
+                </div>
+                <div style={{
+                  fontSize: '0.875rem',
+                  fontWeight: '600',
+                  color: '#1e293b',
+                  lineHeight: '1.4',
+                  wordBreak: 'break-word',
+                }}>
+                  {toast.message}
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <button 
+                onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  transition: 'background-color 0.2s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.05)'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+
+              {/* Progress Bar */}
+              <div style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                height: '3px',
+                backgroundColor: accentColor,
+                animation: `toast-progress ${toast.duration}ms linear forwards`
+              }} />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

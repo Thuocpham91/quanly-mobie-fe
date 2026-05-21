@@ -8,6 +8,7 @@ import { getBranches } from '../api/branches';
 import { searchCustomers } from '../api/customers';
 import { useBranchContext } from '../context/BranchContext';
 import { type Appointment } from '../api/appointments';
+import { getUsers } from '../api/users';
 
 interface AppointmentModalProps {
   isOpen: boolean;
@@ -63,7 +64,16 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
     dateTime: '',
     purpose: 'Khám tổng quát',
     notes: initialNotes || '',
+    userId: '',
   });
+
+  // Query branch users
+  const { data: usersData } = useQuery({
+    queryKey: ['branchUsersForAppt', formData.branchId],
+    queryFn: () => getUsers(formData.branchId, 1, 100),
+    enabled: isOpen && !!formData.branchId,
+  });
+  const branchUsers = usersData?.data || [];
 
   useEffect(() => {
     if (appointment) {
@@ -73,6 +83,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
         dateTime: appointment.dateTime ? appointment.dateTime.substring(0, 16) : '',
         purpose: appointment.purpose || 'Khám tổng quát',
         notes: appointment.notes || '',
+        userId: appointment.userId || '',
       });
       setSelectedCustId(appointment.customerId);
       if (appointment.customer) {
@@ -85,6 +96,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
         dateTime: '',
         purpose: 'Khám tổng quát',
         notes: initialNotes || '',
+        userId: '',
       });
       setSelectedCustId(customerId || '');
       setSelectedCustName('');
@@ -121,6 +133,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
     try {
       const payload = {
         ...formData,
+        userId: formData.userId || undefined,
         customerId: selectedCustId,
         dateTime: new Date(formData.dateTime).toISOString(),
       };
@@ -312,6 +325,27 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
               <option value="Spa & Grooming">Tắm rửa / Cắt tỉa lông (Spa)</option>
               <option value="Lưu trú (Boarding)">Gửi thú cưng (Boarding)</option>
               <option value="Khác">Khác</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+              Nhân viên thực hiện
+            </label>
+            <select
+              name="userId"
+              value={formData.userId}
+              onChange={handleChange}
+              style={{
+                width: '100%', padding: '0.75rem 1rem',
+                borderRadius: '0.75rem', border: '1px solid var(--border)', outline: 'none',
+                backgroundColor: 'white'
+              }}
+            >
+              <option value="">-- Chưa giao việc --</option>
+              {branchUsers.map((u: any) => (
+                <option key={u.id} value={u.id}>{u.fullName} ({u.email})</option>
+              ))}
             </select>
           </div>
 

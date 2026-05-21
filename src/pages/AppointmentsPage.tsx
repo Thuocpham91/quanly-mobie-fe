@@ -289,6 +289,11 @@ const AppointmentsPage: React.FC = () => {
                         <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#334155' }}>
                           {appt.purpose}
                         </div>
+                        {appt.user && (
+                          <div style={{ fontSize: '0.75rem', color: '#0284c7', display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.1rem' }}>
+                            <span style={{ fontWeight: '600' }}>Phụ trách:</span> {appt.user.fullName}
+                          </div>
+                        )}
                         {appt.notes && (
                           <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', display: 'flex', gap: '0.25rem', marginTop: '0.25rem' }}>
                             <span style={{ fontWeight: '600' }}>Ghi chú:</span>
@@ -455,7 +460,7 @@ const AppointmentsPage: React.FC = () => {
                             padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', cursor: 'pointer',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' 
                           }}
-                          title={`${new Date(appt.dateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})} - ${appt.purpose} (${appt.pet?.name})`}
+                          title={`${new Date(appt.dateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})} - ${appt.purpose} (${appt.pet?.name})${appt.user ? ` - Phụ trách: ${appt.user.fullName}` : ''}`}
                         >
                           <span style={{ fontWeight: '700', color: statusColors.text }}>{new Date(appt.dateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}</span>{' '}
                           {appt.pet?.name}

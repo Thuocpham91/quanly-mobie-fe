@@ -19,6 +19,8 @@ export interface Appointment {
   customerId: string;
   customer?: Customer;
   branchId?: string;
+  userId?: string;
+  user?: any;
   dateTime: string;
   purpose: string;
   status: AppointmentStatus;
