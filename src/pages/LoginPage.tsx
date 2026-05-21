@@ -10,8 +10,21 @@ const LoginPage: React.FC = () => {
   const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  React.useEffect(() => {
+    const savedEmail = localStorage.getItem('rememberedEmail');
+    const savedPassword = localStorage.getItem('rememberedPassword');
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+      if (savedPassword) {
+        setPassword(savedPassword);
+      }
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,6 +35,15 @@ const LoginPage: React.FC = () => {
       const data = await authApi.login({ email, password });
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
+      
+      if (rememberMe) {
+        localStorage.setItem('rememberedEmail', email);
+        localStorage.setItem('rememberedPassword', password);
+      } else {
+        localStorage.removeItem('rememberedEmail');
+        localStorage.removeItem('rememberedPassword');
+      }
+
       navigate('/admin');
     } catch (err: any) {
       setError(err.response?.data?.message || t('login.invalid_credentials') || 'Invalid email or password');
@@ -117,6 +139,25 @@ const LoginPage: React.FC = () => {
                 }}
               />
             </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '2rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem', color: '#64748b' }}>
+              <input 
+                type="checkbox" 
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                style={{ 
+                  width: '16px', 
+                  height: '16px', 
+                  borderRadius: '4px', 
+                  border: '1px solid var(--border)',
+                  accentColor: 'var(--primary)',
+                  cursor: 'pointer'
+                }} 
+              />
+              {t('login.remember_me')}
+            </label>
           </div>
 
           <button 

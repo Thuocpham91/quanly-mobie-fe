@@ -91,3 +91,10 @@ button {
 .animate-spin {
   animation: spin 1s linear infinite;
 }
+
+[contenteditable]:empty:before {
+  content: attr(placeholder);
+  color: #94a3b8;
+  font-style: italic;
+  cursor: text;
+}

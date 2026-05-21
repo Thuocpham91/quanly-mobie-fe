@@ -13,7 +13,23 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  
+  const branchId = localStorage.getItem('selectedBranchId');
+  if (branchId && branchId !== 'undefined' && branchId !== 'null') {
+    config.headers['x-branch-id'] = branchId;
+  }
+  
   return config;
 });
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
 
 export default api;
