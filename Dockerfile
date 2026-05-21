@@ -12,7 +12,7 @@ RUN yarn --frozen-lockfile
 COPY . .
 
 # Biến môi trường build-time
-ARG VITE_API_URL=http://localhost:9004/api/v1
+ARG VITE_API_URL=http://localhost:9005/api/v1
 ENV VITE_API_URL=$VITE_API_URL
 
 # Build production bundle
