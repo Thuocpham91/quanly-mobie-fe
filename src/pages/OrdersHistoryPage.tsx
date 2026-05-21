@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ShoppingBag, Eye, Calendar, CreditCard, Banknote, Building, CheckCircle, XCircle, Clock, Printer } from 'lucide-react';
+import { ShoppingBag, Eye, Calendar, CreditCard, Banknote, Building, CheckCircle, XCircle, Clock, Printer, Search, X } from 'lucide-react';
 import { getOrders, getOrderById, updateOrderStatus, type Order } from '../api/orders';
+import { useBranchContext } from '../context/BranchContext';
 import Pagination from '../components/Pagination';
 
 const formatCurrency = (value: number) => {
@@ -10,8 +11,10 @@ const formatCurrency = (value: number) => {
 
 const OrdersHistoryPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { selectedBranchId } = useBranchContext();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'DRAFT' | 'COMPLETED' | 'CANCELLED'>('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   const { data: selectedOrder, isLoading: isLoadingDetail } = useQuery({
@@ -21,12 +24,15 @@ const OrdersHistoryPage: React.FC = () => {
   });
 
   const { data: paginatedData, isLoading } = useQuery({
-    queryKey: ['orders', page],
+    queryKey: ['orders', selectedBranchId, page, 10],
     queryFn: () => getOrders(page, 10),
   });
 
   const orders = paginatedData?.data || [];
   const meta = paginatedData?.meta;
+
+  // Reset page khi đổi filter / search / branch
+  React.useEffect(() => { setPage(1); }, [selectedBranchId, statusFilter, searchTerm]);
 
   const orderMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: 'COMPLETED' | 'CANCELLED' }) => updateOrderStatus(id, status),
@@ -41,8 +47,14 @@ const OrdersHistoryPage: React.FC = () => {
   });
 
   const filteredOrders = orders.filter(order => {
-    if (statusFilter === 'ALL') return true;
-    return order.status === statusFilter;
+    const matchStatus = statusFilter === 'ALL' || order.status === statusFilter;
+    const q = searchTerm.toLowerCase().trim();
+    const matchSearch = !q ||
+      order.orderCode?.toLowerCase().includes(q) ||
+      (order.customer as any)?.fullName?.toLowerCase().includes(q) ||
+      (order.customer as any)?.phone?.includes(q) ||
+      (order as any)?.createdBy?.fullName?.toLowerCase().includes(q);
+    return matchStatus && matchSearch;
   });
 
   const getStatusBadge = (status: string) => {
@@ -220,34 +232,82 @@ const OrdersHistoryPage: React.FC = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div>
-        <h1 style={{ fontSize: '1.875rem', fontWeight: '700', marginBottom: '0.25rem', color: 'var(--foreground)' }}>Lịch sử đơn hàng</h1>
-        <p style={{ color: '#64748b' }}>Xem và quản lý tất cả đơn bán hàng, đơn nháp của chi nhánh.</p>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '1.875rem', fontWeight: '700', marginBottom: '0.25rem', color: 'var(--foreground)' }}>Lịch sử đơn hàng</h1>
+          <p style={{ color: '#64748b' }}>Xem và quản lý tất cả đơn bán hàng, đơn nháp của chi nhánh.</p>
+        </div>
+        {/* Search bar */}
+        <div style={{ position: 'relative', minWidth: '300px', flex: '0 0 auto' }}>
+          <Search size={16} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+          <input
+            type="text"
+            placeholder="Tìm mã đơn, khách hàng, SĐT..."
+            value={searchTerm}
+            onChange={e => { setSearchTerm(e.target.value); setPage(1); }}
+            style={{
+              width: '100%',
+              padding: '0.6rem 2.5rem 0.6rem 2.25rem',
+              borderRadius: '0.625rem',
+              border: '1.5px solid var(--border)',
+              fontSize: '0.875rem',
+              outline: 'none',
+              transition: 'border-color 0.2s',
+              boxSizing: 'border-box',
+            }}
+            onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+            onBlur={e => e.target.style.borderColor = 'var(--border)'}
+          />
+          {searchTerm && (
+            <button
+              onClick={() => { setSearchTerm(''); setPage(1); }}
+              style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center', padding: '0.1rem' }}
+            >
+              <X size={15} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tabs Filter */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', gap: '1rem' }}>
-        {(['ALL', 'COMPLETED', 'DRAFT', 'CANCELLED'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setStatusFilter(tab)}
-            style={{
-              padding: '0.75rem 1rem',
-              fontWeight: '600',
-              fontSize: '0.9rem',
-              color: statusFilter === tab ? 'var(--primary)' : '#64748b',
-              borderBottom: statusFilter === tab ? '2px solid var(--primary)' : '2px solid transparent',
-              backgroundColor: 'transparent',
-              cursor: 'pointer',
-              transition: 'all 0.2s'
-            }}
-          >
-            {tab === 'ALL' && 'Tất cả đơn'}
-            {tab === 'COMPLETED' && 'Đã hoàn thành'}
-            {tab === 'DRAFT' && 'Đơn nháp'}
-            {tab === 'CANCELLED' && 'Đã hủy'}
-          </button>
-        ))}
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', gap: '0.25rem', overflowX: 'auto' }}>
+        {(['ALL', 'COMPLETED', 'DRAFT', 'CANCELLED'] as const).map(tab => {
+          const count = tab === 'ALL'
+            ? orders.filter(o => !searchTerm || filteredOrders.includes(o)).length
+            : orders.filter(o => o.status === tab && (filteredOrders.includes(o) || !searchTerm)).length;
+          return (
+            <button
+              key={tab}
+              onClick={() => setStatusFilter(tab)}
+              style={{
+                padding: '0.75rem 1.1rem',
+                fontWeight: '600',
+                fontSize: '0.875rem',
+                color: statusFilter === tab ? 'var(--primary)' : '#64748b',
+                borderBottom: statusFilter === tab ? '2px solid var(--primary)' : '2px solid transparent',
+                backgroundColor: 'transparent',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+              }}
+            >
+              {tab === 'ALL' && 'Tất cả'}
+              {tab === 'COMPLETED' && 'Hoàn thành'}
+              {tab === 'DRAFT' && 'Đơn nháp'}
+              {tab === 'CANCELLED' && 'Đã hủy'}
+              <span style={{
+                fontSize: '0.7rem', fontWeight: '700',
+                padding: '0.1rem 0.4rem', borderRadius: '9999px',
+                backgroundColor: statusFilter === tab ? 'rgba(99,102,241,0.12)' : '#f1f5f9',
+                color: statusFilter === tab ? 'var(--primary)' : '#64748b',
+              }}>{count}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Orders Table */}
@@ -334,13 +394,16 @@ const OrdersHistoryPage: React.FC = () => {
             </tbody>
           </table>
         </div>
-        {meta && meta.totalPages > 1 && (
-          <Pagination 
-            currentPage={meta.page} 
-            totalPages={meta.totalPages} 
-            onPageChange={setPage} 
-            totalItems={meta.total}
-          />
+        {/* Pagination luôn hiển thị khi có data */}
+        {meta && meta.totalPages >= 1 && (
+          <div style={{ borderTop: '1px solid var(--border)' }}>
+            <Pagination
+              currentPage={meta.page}
+              totalPages={meta.totalPages}
+              onPageChange={setPage}
+              totalItems={meta.total}
+            />
+          </div>
         )}
       </div>
 

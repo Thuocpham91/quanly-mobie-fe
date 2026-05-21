@@ -44,6 +44,24 @@ const LoginPage: React.FC = () => {
         localStorage.removeItem('rememberedPassword');
       }
 
+      // Tự động chọn chi nhánh dựa trên quyền của user
+      const userBranchRoles = data.user?.userBranchRoles || [];
+      const branchIds = [...new Set(userBranchRoles.map((ubr: any) => ubr.branchId))] as string[];
+
+      if (branchIds.length === 1) {
+        // Chỉ có 1 chi nhánh → tự động vào chi nhánh đó
+        localStorage.setItem('selectedBranchId', branchIds[0]);
+      } else if (branchIds.length > 1) {
+        // Nhiều chi nhánh → giữ chi nhánh đã lưu trước đó, nếu không hợp lệ thì xoá
+        const savedBranch = localStorage.getItem('selectedBranchId');
+        if (!savedBranch || !branchIds.includes(savedBranch)) {
+          localStorage.removeItem('selectedBranchId');
+        }
+      } else {
+        // Không có chi nhánh nào → xoá
+        localStorage.removeItem('selectedBranchId');
+      }
+
       navigate('/admin');
     } catch (err: any) {
       setError(err.response?.data?.message || t('login.invalid_credentials') || 'Invalid email or password');

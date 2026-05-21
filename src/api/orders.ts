@@ -63,12 +63,26 @@ export const createOrder = async (orderData: CreateOrderPayload): Promise<Order>
   }
 };
 
-export const getOrders = async (page = 1, limit = 10, petId?: string, customerId?: string): Promise<PaginatedResponse<Order>> => {
+export const getOrders = async (page = 1, limit = 10, petId?: string, customerId?: string, search?: string): Promise<PaginatedResponse<Order>> => {
   const params: any = { page, limit };
   if (petId) params.petId = petId;
   if (customerId) params.customerId = customerId;
+  if (search) params.search = search;
   const response = await api.get('/orders', { params });
-  return response.data;
+  // Map flat response { data, total } → PaginatedResponse chuẩn
+  const raw = response.data;
+  if (raw && typeof raw.total === 'number' && !raw.meta) {
+    return {
+      data: raw.data || [],
+      meta: {
+        total: raw.total,
+        page,
+        limit,
+        totalPages: Math.ceil(raw.total / limit),
+      },
+    };
+  }
+  return raw;
 };
 
 export const getOrderById = async (id: string): Promise<Order> => {

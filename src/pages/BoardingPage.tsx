@@ -6,10 +6,16 @@ import { useBranchContext } from '../context/BranchContext';
 import RoomModal from '../components/RoomModal';
 import CageModal from '../components/CageModal';
 import CageDetailView from '../components/CageDetailView';
+import { getUserPermissions } from '../guards/permissions';
 
 const BoardingPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { selectedBranchId } = useBranchContext();
+
+  const perms = getUserPermissions(selectedBranchId);
+  const isAdminOrHasAll = perms.includes('*');
+  const canManage = isAdminOrHasAll || perms.includes('boarding.manage');
+  const canDelete = isAdminOrHasAll || perms.includes('boarding.delete');
 
   const [filterMode, setFilterMode] = useState<string>('all');
   const [selectedRoomFilter, setSelectedRoomFilter] = useState<string>('all');
@@ -163,9 +169,11 @@ const BoardingPage: React.FC = () => {
               <option key={r.id} value={r.id}>{r.name}</option>
             ))}
           </select>
-          <button className="btn-primary" onClick={handleAddRoom} style={{ padding: '0.6rem 1.5rem', backgroundColor: '#2dd4bf', border: 'none', borderRadius: '0.25rem', color: 'white', fontWeight: '500' }}>
-            Thêm mới
-          </button>
+          {canManage && (
+            <button className="btn-primary" onClick={handleAddRoom} style={{ padding: '0.6rem 1.5rem', backgroundColor: '#2dd4bf', border: 'none', borderRadius: '0.25rem', color: 'white', fontWeight: '500' }}>
+              Thêm mới
+            </button>
+          )}
         </div>
       </div>
 
@@ -202,31 +210,33 @@ const BoardingPage: React.FC = () => {
                   <h3 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#374151', margin: 0 }}>
                     {room.name} ({room.cages?.length || 0})
                   </h3>
-                  <div style={{ position: 'relative' }}>
-                    <Settings 
-                      size={18} 
-                      color="#6b7280" 
-                      style={{ cursor: 'pointer' }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveDropdown(activeDropdown === `room-${room.id}` ? null : `room-${room.id}`);
-                      }}
-                    />
-                    {/* Room Dropdown Menu */}
-                    {activeDropdown === `room-${room.id}` && (
-                      <div style={{
-                        position: 'absolute', top: '100%', left: 0, marginTop: '0.25rem',
-                        backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '0.25rem',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', zIndex: 10, width: '140px'
-                      }}>
-                        <DropdownItem icon={<Plus size={14} />} label="Thêm mới" onClick={() => handleAddCage(room.id)} />
-                        <DropdownItem icon={<Edit2 size={14} />} label="Cập nhật" onClick={() => { setEditingRoom(room); setIsRoomModalOpen(true); }} />
-                        <DropdownItem icon={<Trash2 size={14} />} label="Xóa" onClick={() => {
-                          if (window.confirm('Bạn có chắc muốn xóa phòng này?')) deleteRoomMutation.mutate(room.id);
-                        }} />
-                      </div>
-                    )}
-                  </div>
+                  {(canManage || canDelete) && (
+                    <div style={{ position: 'relative' }}>
+                      <Settings 
+                        size={18} 
+                        color="#6b7280" 
+                        style={{ cursor: 'pointer' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveDropdown(activeDropdown === `room-${room.id}` ? null : `room-${room.id}`);
+                        }}
+                      />
+                      {/* Room Dropdown Menu */}
+                      {activeDropdown === `room-${room.id}` && (
+                        <div style={{
+                          position: 'absolute', top: '100%', left: 0, marginTop: '0.25rem',
+                          backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '0.25rem',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', zIndex: 10, width: '140px'
+                        }}>
+                          {canManage && <DropdownItem icon={<Plus size={14} />} label="Thêm mới" onClick={() => handleAddCage(room.id)} />}
+                          {canManage && <DropdownItem icon={<Edit2 size={14} />} label="Cập nhật" onClick={() => { setEditingRoom(room); setIsRoomModalOpen(true); }} />}
+                          {canDelete && <DropdownItem icon={<Trash2 size={14} />} label="Xóa" onClick={() => {
+                            if (window.confirm('Bạn có chắc muốn xóa phòng này?')) deleteRoomMutation.mutate(room.id);
+                          }} />}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -323,40 +333,42 @@ const BoardingPage: React.FC = () => {
                           fontWeight: '600'
                         }}>
                           <span>{cage.name}</span>
-                          <div style={{ position: 'relative' }}>
-                            <Settings 
-                              size={14} 
-                              style={{ cursor: 'pointer' }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveDropdown(activeDropdown === `cage-${cage.id}` ? null : `cage-${cage.id}`);
-                              }}
-                            />
-                            {/* Cage Dropdown Menu */}
-                            {activeDropdown === `cage-${cage.id}` && (
-                              <div style={{
-                                position: 'absolute', top: '100%', right: 0, marginTop: '0.25rem',
-                                backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '0.25rem',
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', zIndex: 10, width: '120px',
-                                color: '#374151', fontWeight: 'normal'
-                              }}>
-                                <DropdownItem icon={<Edit2 size={14} />} label="Cập nhật" onClick={() => {
-                                  setEditingCage(cage); setTargetRoomIdForCage(room.id); setIsCageModalOpen(true);
-                                }} />
-                                <DropdownItem icon={<Info size={14} />} label="Chi tiết" onClick={() => {
-                                   setSelectedCageForDetails(cage);
-                                 }} />
-                                {cage.status === CageStatus.AVAILABLE && (
-                                  <DropdownItem icon={<Box size={14} />} label="Nhập chuồng" onClick={() => {
+                          {(canManage || canDelete) && (
+                            <div style={{ position: 'relative' }}>
+                              <Settings 
+                                size={14} 
+                                style={{ cursor: 'pointer' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveDropdown(activeDropdown === `cage-${cage.id}` ? null : `cage-${cage.id}`);
+                                }}
+                              />
+                              {/* Cage Dropdown Menu */}
+                              {activeDropdown === `cage-${cage.id}` && (
+                                <div style={{
+                                  position: 'absolute', top: '100%', right: 0, marginTop: '0.25rem',
+                                  backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '0.25rem',
+                                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)', zIndex: 10, width: '120px',
+                                  color: '#374151', fontWeight: 'normal'
+                                }}>
+                                  {canManage && <DropdownItem icon={<Edit2 size={14} />} label="Cập nhật" onClick={() => {
+                                    setEditingCage(cage); setTargetRoomIdForCage(room.id); setIsCageModalOpen(true);
+                                  }} />}
+                                  <DropdownItem icon={<Info size={14} />} label="Chi tiết" onClick={() => {
                                      setSelectedCageForDetails(cage);
-                                  }} />
-                                )}
-                                <DropdownItem icon={<Trash2 size={14} />} label="Xóa" onClick={() => {
-                                  if (window.confirm('Bạn có chắc muốn xóa chuồng này?')) deleteCageMutation.mutate(cage.id);
-                                }} />
-                              </div>
-                            )}
-                          </div>
+                                   }} />
+                                  {canManage && cage.status === CageStatus.AVAILABLE && (
+                                    <DropdownItem icon={<Box size={14} />} label="Nhập chuồng" onClick={() => {
+                                       setSelectedCageForDetails(cage);
+                                    }} />
+                                  )}
+                                  {canDelete && <DropdownItem icon={<Trash2 size={14} />} label="Xóa" onClick={() => {
+                                    if (window.confirm('Bạn có chắc muốn xóa chuồng này?')) deleteCageMutation.mutate(cage.id);
+                                  }} />}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         {/* Cage Body */}

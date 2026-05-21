@@ -5,6 +5,7 @@ import { getAppointments, createAppointment, updateAppointment, deleteAppointmen
 import { useBranchContext } from '../context/BranchContext';
 import Pagination from '../components/Pagination';
 import AppointmentModal from '../components/AppointmentModal';
+import { getUserPermissions } from '../guards/permissions';
 
 const AppointmentsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -12,6 +13,10 @@ const AppointmentsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [page, setPage] = useState(1);
   const { selectedBranchId } = useBranchContext();
+
+  // Kiểm tra quyền
+  const perms = getUserPermissions(selectedBranchId);
+  const canManage = perms.includes('*') || perms.includes('appointments.manage');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState<Appointment | undefined>();
@@ -126,10 +131,12 @@ const AppointmentsPage: React.FC = () => {
           <h1 style={{ fontSize: '1.875rem', marginBottom: '0.25rem' }}>Quản lý công việc</h1>
           <p style={{ color: '#64748b' }}>Quản lý và đặt lịch khám dịch vụ cho thú cưng.</p>
         </div>
-        <button onClick={handleAdd} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Plus size={18} />
-          Tạo công việc
-        </button>
+        {canManage && (
+          <button onClick={handleAdd} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Plus size={18} />
+            Tạo công việc
+          </button>
+        )}
       </div>
 
       {/* Filters Section */}
@@ -309,40 +316,33 @@ const AppointmentsPage: React.FC = () => {
                     {/* Action buttons */}
                     <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
                       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.4rem' }}>
-                        {appt.status === 'PENDING' && (
+                        {appt.status === 'PENDING' && canManage && (
                           <>
                             <button
                               onClick={() => handleStatusChange(appt.id, 'COMPLETED')}
                               title="Hoàn thành"
-                              style={{
-                                padding: '0.4rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer',
-                                backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#059669', display: 'flex', alignItems: 'center'
-                              }}
+                              style={{ padding: '0.4rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#059669', display: 'flex', alignItems: 'center' }}
                             >
                               <CheckCircle size={15} />
                             </button>
                             <button
                               onClick={() => handleStatusChange(appt.id, 'CANCELLED')}
                               title="Hủy lịch"
-                              style={{
-                                padding: '0.4rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer',
-                                backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#dc2626', display: 'flex', alignItems: 'center'
-                              }}
+                              style={{ padding: '0.4rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#dc2626', display: 'flex', alignItems: 'center' }}
                             >
                               <XCircle size={15} />
                             </button>
                           </>
                         )}
-                        <button
-                          onClick={() => handleDelete(appt.id)}
-                          title="Xóa công việc"
-                          style={{
-                            padding: '0.4rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer',
-                            backgroundColor: 'transparent', color: '#ef4444', display: 'flex', alignItems: 'center'
-                          }}
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        {canManage && (
+                          <button
+                            onClick={() => handleDelete(appt.id)}
+                            title="Xóa công việc"
+                            style={{ padding: '0.4rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', backgroundColor: 'transparent', color: '#ef4444', display: 'flex', alignItems: 'center' }}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -414,6 +414,7 @@ const AppointmentsPage: React.FC = () => {
                       cursor: 'pointer'
                     }}
                     onClick={() => {
+                      if (!canManage) return; // Không có quyền → không mở modal tạo
                       setSelectedAppt(undefined);
                       setIsModalOpen(true);
                     }}

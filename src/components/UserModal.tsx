@@ -63,11 +63,22 @@ const UserModal: React.FC<UserModalProps> = ({
 
   const branches = paginatedBranches?.data || [];
 
-  const { data: roles = [] } = useQuery({
+  const ROLE_LABEL_MAP: Record<string, string> = {
+    Admin: "👑 Admin",
+    "Quản lý": "🏢 Quản lý",
+    "Nhân viên": "👤 Nhân viên",
+    Vet: "🩺 Bác sĩ thú y",
+    Receptionist: "👤 Lễ tân",
+  };
+
+  const { data: allRoles = [] } = useQuery({
     queryKey: ["roles"],
     queryFn: getRoles,
     enabled: isOpen,
   });
+
+  // Hiển thị TẤT CẢ vai trò - không lọc cứng nữa
+  const roles = allRoles;
 
   useEffect(() => {
     if (user) {
@@ -478,7 +489,7 @@ const UserModal: React.FC<UserModalProps> = ({
                           <option value="">-- Chọn vai trò --</option>
                           {roles.map((r) => (
                             <option key={r.id} value={r.id}>
-                              {r.name}
+                              {ROLE_LABEL_MAP[r.name] ?? r.name}
                             </option>
                           ))}
                         </select>
@@ -627,49 +638,80 @@ const UserModal: React.FC<UserModalProps> = ({
                 )}
 
                 {/* Chuyên ngành */}
-                {formData.role !== "customer" && (
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        fontSize: "0.875rem",
-                        fontWeight: "600",
-                        marginBottom: "0.5rem",
-                      }}
-                    >
-                      Chuyên ngành:
-                    </label>
-                    <div style={{ position: "relative" }}>
-                      <input
-                        type="text"
-                        name="specialties"
-                        value={formData.specialties}
-                        onChange={handleChange}
-                        placeholder="Ví dụ: Ngoại khoa, Nội khoa..."
-                        style={{
-                          width: "100%",
-                          padding: "0.75rem 2.5rem 0.75rem 1rem",
-                          borderRadius: "0.5rem",
-                          border: "1px solid var(--border)",
-                          outline: "none",
-                        }}
-                      />
-                      <span
-                        style={{
-                          position: "absolute",
-                          right: "12px",
-                          top: "50%",
-                          transform: "translateY(-50%)",
-                          color: "var(--primary)",
-                          fontWeight: "bold",
-                          cursor: "pointer",
-                        }}
-                      >
-                        +
-                      </span>
+                {formData.role !== "customer" && (() => {
+                  const VET_SPECIALTIES = [
+                    "Nội khoa",
+                    "Ngoại khoa",
+                    "Sản khoa",
+                    "Chẩn đoán hình ảnh",
+                    "Răng - Hàm - Mặt",
+                    "Da liễu",
+                    "Nhãn khoa",
+                    "Ung bướu",
+                    "Tim mạch",
+                    "Thần kinh",
+                    "Dinh dưỡng & Nội tiết",
+                    "Gây mê hồi sức",
+                    "Truyền nhiễm",
+                    "Chỉnh hình",
+                    "Thú y thủy sản",
+                  ];
+                  const selected = formData.specialties
+                    ? formData.specialties.split(",").map((s) => s.trim()).filter(Boolean)
+                    : [];
+                  const toggleSpecialty = (sp: string) => {
+                    const next = selected.includes(sp)
+                      ? selected.filter((s) => s !== sp)
+                      : [...selected, sp];
+                    setFormData((prev) => ({ ...prev, specialties: next.join(", ") }));
+                  };
+                  return (
+                    <div>
+                      <label style={{ display: "block", fontSize: "0.875rem", fontWeight: "600", marginBottom: "0.5rem" }}>
+                        Chuyên ngành:
+                      </label>
+                      <div style={{
+                        display: "flex", flexWrap: "wrap", gap: "0.4rem",
+                        padding: "0.6rem", borderRadius: "0.5rem",
+                        border: "1px solid var(--border)", background: "#f8fafc",
+                        maxHeight: "130px", overflowY: "auto",
+                      }}>
+                        {VET_SPECIALTIES.map((sp) => {
+                          const active = selected.includes(sp);
+                          return (
+                            <button
+                              key={sp}
+                              type="button"
+                              onClick={() => toggleSpecialty(sp)}
+                              style={{
+                                padding: "0.25rem 0.65rem",
+                                borderRadius: "2rem",
+                                fontSize: "0.75rem",
+                                fontWeight: active ? "700" : "500",
+                                cursor: "pointer",
+                                border: active ? "none" : "1px solid #cbd5e1",
+                                background: active
+                                  ? "linear-gradient(135deg,#6366f1,#8b5cf6)"
+                                  : "white",
+                                color: active ? "white" : "#64748b",
+                                boxShadow: active ? "0 2px 8px rgba(99,102,241,0.3)" : "none",
+                                transition: "all 0.15s",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {active ? "✓ " : ""}{sp}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {selected.length > 0 && (
+                        <p style={{ fontSize: "0.72rem", color: "#6366f1", marginTop: "0.35rem", fontWeight: "600" }}>
+                          Đã chọn: {selected.join(" · ")}
+                        </p>
+                      )}
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Password Notice */}
                 {!user && (

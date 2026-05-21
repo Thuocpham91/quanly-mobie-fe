@@ -19,8 +19,10 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-i18next": "^17.0.7",
+    "react-is": "^19.2.6",
     "react-quill-new": "^3.8.3",
     "react-router-dom": "^7.15.0",
+    "recharts": "^3.8.1",
     "socket.io-client": "^4.7.5",
     "tailwind-merge": "^3.6.0",
     "xlsx": "^0.18.5"

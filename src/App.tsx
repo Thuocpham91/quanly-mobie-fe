@@ -23,10 +23,24 @@ import StockHistoryPage from './pages/StockHistoryPage';
 import StocktakeListPage from './pages/StocktakeListPage';
 import StocktakeFormPage from './pages/StocktakeFormPage';
 import InventoryTransferPage from './pages/InventoryTransferPage';
+import PermissionGuard from './guards/PermissionGuard';
 
 import { BranchProvider } from './context/BranchContext';
 
 const queryClient = new QueryClient();
+
+/**
+ * Helper: bọc page component trong PermissionGuard
+ * Đọc selectedBranchId từ localStorage mỗi lần render
+ */
+function P({ path, children }: { path: string; children: React.ReactNode }) {
+  const selectedBranchId = localStorage.getItem('selectedBranchId') || '';
+  return (
+    <PermissionGuard path={path} selectedBranchId={selectedBranchId}>
+      {children}
+    </PermissionGuard>
+  );
+}
 
 function App() {
   return (
@@ -37,26 +51,26 @@ function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/admin" element={<DashboardLayout />}>
-              <Route index element={<DashboardHome />} />
-              <Route path="pets" element={<PetsPage />} />
-              <Route path="customers" element={<CustomersPage />} />
-              <Route path="appointments" element={<AppointmentsPage />} />
-              <Route path="boarding" element={<BoardingPage />} />
-              <Route path="inventory" element={<InventoryPage />} />
-              <Route path="inventory/import" element={<InventoryImportPage />} />
-              <Route path="inventory/transfer" element={<InventoryTransferPage />} />
-              <Route path="inventory/history" element={<StockHistoryPage />} />
-              <Route path="inventory/stocktakes" element={<StocktakeListPage />} />
-              <Route path="inventory/stocktakes/:id" element={<StocktakeFormPage />} />
-              <Route path="products" element={<ProductsPage />} />
-              <Route path="product-prices" element={<ProductPricesPage />} />
-              <Route path="pos" element={<POSPage />} />
-              <Route path="orders" element={<OrdersHistoryPage />} />
-              <Route path="distributors" element={<DistributorsPage />} />
-              <Route path="users" element={<UsersPage />} />
-              <Route path="roles" element={<RolesPage />} />
-              <Route path="branches" element={<BranchesPage />} />
-              <Route path="settings" element={<SettingsPage />} />
+              <Route index element={<P path="/admin"><DashboardHome /></P>} />
+              <Route path="pets"                    element={<P path="/admin/pets"><PetsPage /></P>} />
+              <Route path="customers"               element={<P path="/admin/customers"><CustomersPage /></P>} />
+              <Route path="appointments"            element={<P path="/admin/appointments"><AppointmentsPage /></P>} />
+              <Route path="boarding"                element={<P path="/admin/boarding"><BoardingPage /></P>} />
+              <Route path="inventory"               element={<P path="/admin/inventory"><InventoryPage /></P>} />
+              <Route path="inventory/import"        element={<P path="/admin/inventory/import"><InventoryImportPage /></P>} />
+              <Route path="inventory/transfer"      element={<P path="/admin/inventory/transfer"><InventoryTransferPage /></P>} />
+              <Route path="inventory/history"       element={<P path="/admin/inventory/history"><StockHistoryPage /></P>} />
+              <Route path="inventory/stocktakes"    element={<P path="/admin/inventory/stocktakes"><StocktakeListPage /></P>} />
+              <Route path="inventory/stocktakes/:id"element={<P path="/admin/inventory/stocktakes"><StocktakeFormPage /></P>} />
+              <Route path="products"                element={<P path="/admin/products"><ProductsPage /></P>} />
+              <Route path="product-prices"          element={<P path="/admin/product-prices"><ProductPricesPage /></P>} />
+              <Route path="pos"                     element={<P path="/admin/pos"><POSPage /></P>} />
+              <Route path="orders"                  element={<P path="/admin/orders"><OrdersHistoryPage /></P>} />
+              <Route path="distributors"            element={<P path="/admin/distributors"><DistributorsPage /></P>} />
+              <Route path="users"                   element={<P path="/admin/users"><UsersPage /></P>} />
+              <Route path="roles"                   element={<P path="/admin/roles"><RolesPage /></P>} />
+              <Route path="branches"                element={<P path="/admin/branches"><BranchesPage /></P>} />
+              <Route path="settings"                element={<P path="/admin/settings"><SettingsPage /></P>} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

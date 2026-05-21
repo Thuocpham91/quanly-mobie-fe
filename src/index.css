@@ -80,11 +80,18 @@ button {
 }
 
 @keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes dropdownSlideIn {
   from {
-    transform: rotate(0deg);
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
   }
   to {
-    transform: rotate(360deg);
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -107,3 +114,154 @@ button {
 .html-notes-preview {
   display: inline;
 }
+
+/* ══════════════════════════════
+   RESPONSIVE UTILITIES
+══════════════════════════════ */
+
+/* Ẩn trên mobile */
+@media (max-width: 767px) {
+  .hide-mobile { display: none !important; }
+  .show-mobile { display: flex !important; }
+}
+@media (min-width: 768px) {
+  .hide-desktop { display: none !important; }
+  .show-mobile  { display: none !important; }
+}
+
+/* Grid responsive */
+.grid-2col {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .grid-2col {
+    grid-template-columns: 1fr;
+  }
+}
+
+.grid-user-perm {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 1.5rem;
+}
+@media (max-width: 900px) {
+  .grid-user-perm {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Page wrapper */
+.page-wrapper {
+  padding: 1.5rem;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+@media (max-width: 767px) {
+  .page-wrapper {
+    padding: 1rem 0.75rem;
+  }
+}
+
+/* Card overflow fix */
+.card {
+  overflow: hidden;
+}
+
+/* Table scroll */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Touch-friendly tap targets */
+@media (max-width: 767px) {
+  button {
+    min-height: 40px;
+  }
+  input, select, textarea {
+    font-size: 16px !important; /* Prevent iOS zoom */
+  }
+}
+
+/* Modal responsive */
+.modal-box {
+  width: 480px;
+  max-width: calc(100vw - 2rem);
+  margin: 1rem;
+}
+
+/* Roles page grid layout */
+.roles-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .roles-layout {
+    grid-template-columns: 1fr;
+  }
+  .roles-sidebar {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.5rem;
+  }
+}
+
+/* Permission modules grid */
+.perms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+@media (max-width: 600px) {
+  .perms-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* User perm layout */
+.user-perm-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 1.5rem;
+}
+@media (max-width: 900px) {
+  .user-perm-layout {
+    grid-template-columns: 1fr;
+  }
+  .user-list-panel {
+    max-height: 260px !important;
+  }
+}
+
+/* Toolbar wrap on mobile */
+.toolbar-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+/* Add branch form grid */
+.add-branch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+@media (max-width: 500px) {
+  .add-branch-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Scrollbar thin */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+

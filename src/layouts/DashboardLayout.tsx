@@ -86,54 +86,98 @@ const DashboardLayout: React.FC = () => {
     queryFn: () => branchesApi.getBranches(1, 50),
   });
 
-  const branches = paginatedBranches?.data || [];
+  const allBranches = paginatedBranches?.data || [];
 
-  // Removed automatic branch selection to allow "All Branches" (empty string) to be selected
+  // Lọc chi nhánh theo user được phân quyền
+  const userBranchRoles: any[] = currentUser?.userBranchRoles || [];
+  const userBranchIds = userBranchRoles.map((ubr: any) => ubr.branchId);
+  const isAdmin = currentUser?.email?.toLowerCase() === 'admin@gmail.com';
 
-  const menuGroups = [
+  // Admin thấy tất cả, user thường chỉ thấy chi nhánh được phân
+  const branches = isAdmin
+    ? allBranches
+    : allBranches.filter(b => userBranchIds.includes(b.id));
+
+  // Nếu chỉ có 1 chi nhánh và chưa set, tự động chọn
+  React.useEffect(() => {
+    if (branches.length === 1 && !selectedBranchId) {
+      setSelectedBranchId(branches[0].id);
+    }
+  }, [branches.length, selectedBranchId]);
+
+  // Lấy danh sách permissions của user (theo chi nhánh đang chọn hoặc tổng hợp tất cả)
+  const userPermissions = React.useMemo(() => {
+    if (isAdmin) return ['*']; // Admin có tất cả
+    const relevantRoles = selectedBranchId
+      ? userBranchRoles.filter((ubr: any) => ubr.branchId === selectedBranchId)
+      : userBranchRoles;
+    const perms = new Set<string>();
+    relevantRoles.forEach((ubr: any) => {
+      // Nếu role là Admin thì có tất cả
+      if (ubr.role?.name === 'Admin') { perms.add('*'); return; }
+      (ubr.role?.permissions || []).forEach((p: any) => perms.add(p.name));
+    });
+    return [...perms];
+  }, [isAdmin, selectedBranchId, userBranchRoles]);
+
+  const hasPermission = (perm?: string) => {
+    if (!perm) return true; // Không yêu cầu quyền → luôn hiện
+    if (userPermissions.includes('*')) return true;
+    return userPermissions.includes(perm);
+  };
+
+  const allMenuGroups = [
     {
       label: 'Tổng quan',
       icon: <LayoutDashboard size={18} />,
       items: [
-        { path: '/admin', icon: <LayoutDashboard size={18} />, label: t('common.dashboard') },
-        { path: '/admin/customers', icon: <Users size={18} />, label: t('common.customers') },
-        { path: '/admin/pets', icon: <Dog size={18} />, label: t('common.pets') },
-        { path: '/admin/appointments', icon: <Calendar size={18} />, label: t('common.appointments') },
-        { path: '/admin/boarding', icon: <Box size={18} />, label: t('common.boarding') },
+        { path: '/admin',              icon: <LayoutDashboard size={18} />, label: t('common.dashboard'),     permission: 'dashboard.view' },
+        { path: '/admin/customers',    icon: <Users size={18} />,           label: t('common.customers'),     permission: 'customers.view' },
+        { path: '/admin/pets',         icon: <Dog size={18} />,             label: t('common.pets'),          permission: 'pets.view' },
+        { path: '/admin/appointments', icon: <Calendar size={18} />,        label: 'Công việc',           permission: 'appointments.view' },
+        { path: '/admin/boarding',     icon: <Box size={18} />,             label: t('common.boarding'),      permission: 'boarding.view' },
       ]
     },
     {
       label: 'Bán hàng',
       icon: <ShoppingCart size={18} />,
       items: [
-        { path: '/admin/pos', icon: <ShoppingCart size={18} />, label: 'Bán hàng (POS)' },
-        { path: '/admin/orders', icon: <ShoppingBag size={18} />, label: 'Lịch sử đơn hàng' },
+        { path: '/admin/pos',    icon: <ShoppingCart size={18} />, label: 'Bán hàng (POS)',      permission: 'sales.create' },
+        { path: '/admin/orders', icon: <ShoppingBag size={18} />,  label: 'Lịch sử đơn hàng',   permission: 'history.view' },
       ]
     },
     {
       label: 'Kho hàng',
       icon: <Package size={18} />,
       items: [
-        { path: '/admin/products', icon: <Box size={18} />, label: t('common.products') },
-        { path: '/admin/product-prices', icon: <Tags size={18} />, label: 'Quản lý giá' },
-        { path: '/admin/inventory', icon: <Package size={18} />, label: t('common.inventory') },
-        { path: '/admin/inventory/stocktakes', icon: <ClipboardCheck size={18} />, label: 'Kiểm kho' },
-        { path: '/admin/inventory/transfer', icon: <ArrowLeftRight size={18} />, label: 'Xuất & Chuyển kho' },
-        { path: '/admin/inventory/history', icon: <Package size={18} />, label: 'Biến động kho' },
-        { path: '/admin/distributors', icon: <Building2 size={18} />, label: t('common.distributors') },
+        { path: '/admin/products',              icon: <Box size={18} />,            label: t('common.products'),     permission: 'products.view' },
+        { path: '/admin/product-prices',        icon: <Tags size={18} />,           label: 'Quản lý giá',            permission: 'products.create_edit' },
+        { path: '/admin/inventory',             icon: <Package size={18} />,        label: t('common.inventory'),    permission: 'inventory.import' },
+        { path: '/admin/inventory/stocktakes',  icon: <ClipboardCheck size={18} />, label: 'Kiểm kho',               permission: 'inventory.import' },
+        { path: '/admin/inventory/transfer',    icon: <ArrowLeftRight size={18} />, label: 'Xuất & Chuyển kho',      permission: 'inventory.import' },
+        { path: '/admin/inventory/history',     icon: <Package size={18} />,        label: 'Biến động kho',          permission: 'inventory.import' },
+        { path: '/admin/distributors',          icon: <Building2 size={18} />,      label: t('common.distributors'), permission: 'inventory.import' },
       ]
     },
     {
       label: 'Hệ thống',
       icon: <SettingsIcon size={18} />,
       items: [
-        { path: '/admin/users', icon: <UserCog size={18} />, label: t('common.users') },
-        { path: '/admin/roles', icon: <Shield size={18} />, label: 'Phân quyền' },
-        { path: '/admin/branches', icon: <Home size={18} />, label: t('common.branches') },
-        { path: '/admin/settings', icon: <SettingsIcon size={18} />, label: t('common.settings') },
+        { path: '/admin/users',    icon: <UserCog size={18} />,      label: t('common.users'),    permission: 'users.view' },
+        { path: '/admin/roles',    icon: <Shield size={18} />,       label: 'Phân quyền',         permission: 'users.manage' },
+        { path: '/admin/branches', icon: <Home size={18} />,         label: t('common.branches'), permission: 'branches.manage' },
+        { path: '/admin/settings', icon: <SettingsIcon size={18} />, label: t('common.settings'), permission: 'settings.view' },
       ]
     },
   ];
+
+  // Lọc menu theo quyền
+  const menuGroups = allMenuGroups
+    .map(group => ({
+      ...group,
+      items: group.items.filter(item => hasPermission(item.permission)),
+    }))
+    .filter(group => group.items.length > 0);
 
   // Auto-expand group containing current path
   React.useEffect(() => {
@@ -344,13 +388,15 @@ const DashboardLayout: React.FC = () => {
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Header */}
         <header style={{ 
-          height: '70px', 
+          height: '64px', 
           backgroundColor: 'var(--card)', 
           borderBottom: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 2rem'
+          padding: isMobile ? '0 0.875rem' : '0 2rem',
+          gap: '0.5rem',
+          overflow: 'hidden',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '0.75rem' : '1.5rem' }}>
             <button 
@@ -391,33 +437,28 @@ const DashboardLayout: React.FC = () => {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
             {/* Branch Selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'rgba(99, 102, 241, 0.1)', padding: '0.4rem 1rem', borderRadius: '2rem' }}>
-              <MapPin size={16} color="var(--primary)" />
-              <select
-                value={selectedBranchId}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  outline: 'none',
-                  fontSize: '0.875rem',
-                  fontWeight: '600',
-                  color: 'var(--primary)',
-                  cursor: 'pointer',
-                  appearance: 'none', // Remove default arrow in some browsers
-                  paddingRight: '1rem'
-                }}
-              >
-                <option value="">Tất cả chi nhánh</option>
-                {branches.map(branch => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', backgroundColor: 'rgba(99, 102, 241, 0.1)', padding: isMobile ? '0.35rem 0.6rem' : '0.4rem 1rem', borderRadius: '2rem', maxWidth: isMobile ? '140px' : 'none', overflow: 'hidden' }}>
+              <MapPin size={14} color="var(--primary)" style={{ flexShrink: 0 }} />
+              {branches.length === 1 ? (
+                <span style={{ fontSize: isMobile ? '0.78rem' : '0.875rem', fontWeight: '600', color: 'var(--primary)', userSelect: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {branches[0].name}
+                </span>
+              ) : (
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  style={{ background: 'none', border: 'none', outline: 'none', fontSize: isMobile ? '0.78rem' : '0.875rem', fontWeight: '600', color: 'var(--primary)', cursor: 'pointer', appearance: 'none', maxWidth: isMobile ? '100px' : '180px' }}
+                >
+                  <option value="">{isMobile ? 'Tất cả' : 'Tất cả chi nhánh'}</option>
+                  {branches.map(branch => (
+                    <option key={branch.id} value={branch.id}>{branch.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
-            <LanguageSwitcher />
+            {/* Ẩn LanguageSwitcher trên mobile để tiết kiệm chỗ */}
+            {!isMobile && <LanguageSwitcher />}
             {!isMobile && (
               <button style={{ position: 'relative', background: 'none', color: 'var(--foreground)' }}>
                 <Bell size={20} />
@@ -466,58 +507,122 @@ const DashboardLayout: React.FC = () => {
               {/* User Dropdown Menu */}
               {isUserMenuOpen && (
                 <>
-                  <div 
+                  {/* Backdrop */}
+                  <div
                     onClick={() => setIsUserMenuOpen(false)}
                     style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 998 }}
                   />
-                  <div style={{ 
-                    position: 'absolute', 
-                    top: '120%', 
-                    right: 0, 
-                    width: '220px', 
-                    backgroundColor: 'white', 
-                    borderRadius: '0.75rem', 
-                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)',
-                    border: '1px solid #e2e8f0',
-                    padding: '0.5rem',
+                  {/* Dropdown */}
+                  <div style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 12px)',
+                    right: 0,
+                    width: '260px',
+                    backgroundColor: 'white',
+                    borderRadius: '1rem',
+                    boxShadow: '0 20px 40px -8px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)',
                     zIndex: 999,
-                    animation: 'fadeIn 0.2s ease-out'
+                    overflow: 'hidden',
+                    animation: 'dropdownSlideIn 0.18s cubic-bezier(0.16,1,0.3,1)',
                   }}>
-                    <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f1f5f9', marginBottom: '0.5rem' }}>
-                      <p style={{ fontSize: '0.875rem', fontWeight: '700', color: '#1e293b' }}>{currentUser?.fullName}</p>
-                      <p style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.1rem' }}>{currentUser?.email}</p>
+                    {/* User info header */}
+                    <div style={{ padding: '1.25rem', background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+                        <div style={{
+                          width: '48px', height: '48px', borderRadius: '50%',
+                          backgroundColor: 'rgba(255,255,255,0.25)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: 'white', fontWeight: '800', fontSize: '1.25rem',
+                          border: '2px solid rgba(255,255,255,0.4)',
+                          flexShrink: 0,
+                        }}>
+                          {(currentUser?.fullName || 'U').charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{ overflow: 'hidden' }}>
+                          <p style={{ fontSize: '0.9rem', fontWeight: '700', color: 'white', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {currentUser?.fullName || 'Người dùng'}
+                          </p>
+                          <p style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)', margin: '0.15rem 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {currentUser?.email}
+                          </p>
+                          {/* Role badge */}
+                          {(() => {
+                            const roles: any[] = currentUser?.userBranchRoles || [];
+                            const roleName = roles[0]?.role?.name;
+                            if (!roleName) return null;
+                            return (
+                              <span style={{
+                                display: 'inline-block', marginTop: '0.35rem',
+                                fontSize: '0.65rem', fontWeight: '700', letterSpacing: '0.05em',
+                                textTransform: 'uppercase', padding: '0.15rem 0.5rem',
+                                borderRadius: '9999px', background: 'rgba(255,255,255,0.25)',
+                                color: 'white', border: '1px solid rgba(255,255,255,0.3)',
+                              }}>
+                                {roleName === 'Admin' ? '👑' : roleName === 'Quản lý' ? '🏢' : '👤'} {roleName}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </div>
                     </div>
 
-                    <Link 
-                      to="/admin/settings" 
-                      onClick={() => setIsUserMenuOpen(false)}
-                      style={{ 
-                        display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 1rem', borderRadius: '0.5rem',
-                        textDecoration: 'none', color: '#475569', fontSize: '0.875rem', transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f1f5f9'; e.currentTarget.style.color = 'var(--primary)'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#475569'; }}
-                    >
-                      <User size={16} />
-                      Chỉnh sửa thông tin
-                    </Link>
+                    {/* Menu items */}
+                    <div style={{ padding: '0.5rem' }}>
+                      <Link
+                        to="/admin/settings"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.65rem 0.875rem', borderRadius: '0.6rem', textDecoration: 'none', color: '#374151', fontSize: '0.875rem', fontWeight: '500', transition: 'all 0.15s' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f5f3ff'; e.currentTarget.style.color = '#6366f1'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#374151'; }}
+                      >
+                        <div style={{ width: '32px', height: '32px', borderRadius: '0.5rem', backgroundColor: '#f5f3ff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <SettingsIcon size={15} color="#6366f1" />
+                        </div>
+                        <div>
+                          <p style={{ margin: 0, fontWeight: '600' }}>Cài đặt</p>
+                          <p style={{ margin: 0, fontSize: '0.72rem', color: '#9ca3af' }}>Tùy chỉnh hệ thống</p>
+                        </div>
+                      </Link>
 
-                    <button 
-                      onClick={handleLogout}
-                      style={{ 
-                        width: '100%', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.6rem 1rem', borderRadius: '0.5rem',
-                        background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', color: '#ef4444', fontSize: '0.875rem', transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fef2f2'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <LogOut size={16} />
-                      Đăng xuất
-                    </button>
+                      <Link
+                        to="/admin/users"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.65rem 0.875rem', borderRadius: '0.6rem', textDecoration: 'none', color: '#374151', fontSize: '0.875rem', fontWeight: '500', transition: 'all 0.15s' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f0fdf4'; e.currentTarget.style.color = '#10b981'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#374151'; }}
+                      >
+                        <div style={{ width: '32px', height: '32px', borderRadius: '0.5rem', backgroundColor: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <User size={15} color="#10b981" />
+                        </div>
+                        <div>
+                          <p style={{ margin: 0, fontWeight: '600' }}>Tài khoản</p>
+                          <p style={{ margin: 0, fontSize: '0.72rem', color: '#9ca3af' }}>Quản lý người dùng</p>
+                        </div>
+                      </Link>
+
+                      {/* Divider */}
+                      <div style={{ height: '1px', backgroundColor: '#f1f5f9', margin: '0.4rem 0' }} />
+
+                      <button
+                        onClick={handleLogout}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.65rem 0.875rem', borderRadius: '0.6rem', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', color: '#ef4444', fontSize: '0.875rem', fontWeight: '500', transition: 'all 0.15s' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#fef2f2'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      >
+                        <div style={{ width: '32px', height: '32px', borderRadius: '0.5rem', backgroundColor: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <LogOut size={15} color="#ef4444" />
+                        </div>
+                        <div>
+                          <p style={{ margin: 0, fontWeight: '600' }}>Đăng xuất</p>
+                          <p style={{ margin: 0, fontSize: '0.72rem', color: '#9ca3af' }}>Thoát khỏi hệ thống</p>
+                        </div>
+                      </button>
+                    </div>
                   </div>
                 </>
               )}
             </div>
+
           </div>
         </header>
 
