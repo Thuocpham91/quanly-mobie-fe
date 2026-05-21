@@ -492,8 +492,9 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                                   Lý do: <strong>{appt.purpose}</strong>
                                 </div>
                                 {appt.notes && (
-                                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', marginTop: '0.25rem' }}>
-                                    Ghi chú: {appt.notes}
+                                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', marginTop: '0.25rem', display: 'flex', gap: '0.25rem' }}>
+                                    <span style={{ fontWeight: '600' }}>Ghi chú:</span>
+                                    <div dangerouslySetInnerHTML={{ __html: appt.notes }} className="html-notes-preview" style={{ display: 'inline', margin: 0 }} />
                                   </div>
                                 )}
                               </div>

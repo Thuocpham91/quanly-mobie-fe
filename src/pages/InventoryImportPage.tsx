@@ -333,7 +333,7 @@ const InventoryImportPage: React.FC = () => {
           newItems.push({
             id: Math.random().toString(36).substr(2, 9),
             product,
-            unitQuantities: { [product.unitId]: quantity },
+            unitQuantities: { [product.unitId || 'default']: quantity },
             quantityPieces: quantity,
             baseUnitId: product.unitId || '',
             costPrice: price,

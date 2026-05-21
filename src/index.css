@@ -98,3 +98,12 @@ button {
   font-style: italic;
   cursor: text;
 }
+
+/* Fix Quill HTML preview styles */
+.html-notes-preview p {
+  display: inline;
+  margin: 0;
+}
+.html-notes-preview {
+  display: inline;
+}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ArrowLeft, Search, Calendar, Edit2, User, Phone, FileText, Activity, DollarSign, RefreshCw, LogOut, MessageSquare, Clipboard, X, Plus, Trash2, Image, Upload, CalendarPlus } from 'lucide-react';
+import { ArrowLeft, Search, Calendar, Edit2, User, Phone, FileText, Activity, DollarSign, RefreshCw, LogOut, MessageSquare, Clipboard, X, Plus, Trash2, Upload, CalendarPlus } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
@@ -170,10 +170,7 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
     return currentNotesData.services.reduce((sum: number, item: any) => sum + (Number(item.price || 0) * Number(item.qty || 0)), 0);
   }, [currentNotesData.services]);
 
-  const [isEditingNotes, setIsEditingNotes] = useState(false);
-  const [notesText, setNotesText] = useState('');
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
-  const [notesActiveTab, setNotesActiveTab] = useState<'edit' | 'preview'>('edit');
 
   const [localDailyNotes, setLocalDailyNotes] = useState<any[]>([]);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -3856,7 +3853,7 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
         </div>
       )}
 
-      {quickTaskModalData.isOpen && cage.customer && cage.pet && (
+      {quickTaskModalData.isOpen && cage.pet && (cage.pet.ownerId || cage.pet.owner?.id) && (
         <AppointmentModal
           isOpen={true}
           onClose={() => setQuickTaskModalData({ isOpen: false, initialNotes: '' })}
@@ -3864,7 +3861,7 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
             await createAppointment(data);
             alert('Tạo công việc thành công!');
           }}
-          customerId={cage.customer.id}
+          customerId={cage.pet.ownerId || cage.pet.owner?.id}
           initialNotes={quickTaskModalData.initialNotes}
         />
       )}

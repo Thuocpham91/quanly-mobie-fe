@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Save, ArrowLeft, Plus, Trash2, CheckCircle, XCircle } from 'lucide-react';
 import { getStocktake, createStocktake, approveStocktake, StocktakeStatus, type StocktakeItemDto } from '../api/stocktakes';
-import { getInventorySummary, getProducts } from '../api/inventory';
+import { getInventorySummary, getProducts, type Product } from '../api/inventory';
 import { useBranchContext } from '../context/BranchContext';
 
 const StocktakeFormPage: React.FC = () => {
@@ -31,7 +31,7 @@ const StocktakeFormPage: React.FC = () => {
     enabled: !!selectedBranchId,
   });
 
-  const { data: products = [], isLoading: loadingProducts } = useQuery<Product[]>({
+  const { data: products = [] } = useQuery<Product[]>({
   queryKey: ['products'],
   queryFn: () => getProducts(),
 });

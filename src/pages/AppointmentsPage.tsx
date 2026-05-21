@@ -15,7 +15,7 @@ const AppointmentsPage: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState<Appointment | undefined>();
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   // Fetch appointments for List View
@@ -283,8 +283,9 @@ const AppointmentsPage: React.FC = () => {
                           {appt.purpose}
                         </div>
                         {appt.notes && (
-                          <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic' }}>
-                            Ghi chú: {appt.notes}
+                          <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', display: 'flex', gap: '0.25rem', marginTop: '0.25rem' }}>
+                            <span style={{ fontWeight: '600' }}>Ghi chú:</span>
+                            <div dangerouslySetInnerHTML={{ __html: appt.notes }} className="html-notes-preview" style={{ display: 'inline', margin: 0 }} />
                           </div>
                         )}
                       </div>
