@@ -6,10 +6,8 @@ import 'react-quill-new/dist/quill.snow.css';
 import api from '../api/client';
 import { type Cage, CageStatus, getRooms, type Room } from '../api/boarding';
 import { topUpWallet } from '../api/customers';
-import { updatePet } from '../api/pets';
-import { createAppointment } from '../api/appointments';
 import BoardingEntryModal from './BoardingEntryModal';
-import AppointmentModal from './AppointmentModal';
+import MedicalRecordModal from './MedicalRecordModal';
 
 interface Pet {
   id: string;
@@ -229,121 +227,8 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [selectedTargetCageId, setSelectedTargetCageId] = useState<string>('');
 
-  // Interfaces for Medical Record
-  interface MedicalExamRecord {
-    id: string;
-    date: string;
-    branch: string;
-    vetName: string;
-    customerSymptoms: string;
-    clinicalSigns: {
-      temperature: string;
-      weight: string;
-      dewormed: string;
-      bloodPressure: string;
-      spo2: string;
-      vaccinated: string;
-      heartRate: string;
-      pulse: string;
-      clinicalManifestation: string;
-    };
-    examinationPackage: {
-      inpatientTreatment: string;
-      medicineSales: string;
-      liquidMedicine: string;
-    };
-    prescriptions: Array<{
-      name: string;
-      qty: number;
-      unit: string;
-      dosage: string;
-      usage: string;
-      note: string;
-    }>;
-    services: Array<{
-      name: string;
-      qty: number;
-      price: number;
-      total: number;
-      note: string;
-    }>;
-    summary?: {
-      diagnosis: string;
-      prognosis: string;
-      advice: string;
-      followUp: string;
-      followUpReason: string;
-      note: string;
-    };
-  }
-
   // States for Medical Record (Bệnh án)
   const [isMedicalRecordModalOpen, setIsMedicalRecordModalOpen] = useState(false);
-  const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
-  const [isEditingRecord, setIsEditingRecord] = useState(false);
-  const [editingRecordData, setEditingRecordData] = useState<MedicalExamRecord | null>(null);
-  const [activePrescriptionSearchIdx, setActivePrescriptionSearchIdx] = useState<number | null>(null);
-  const [activeServiceSearchIdx, setActiveServiceSearchIdx] = useState<number | null>(null);
-  const [prescriptionSearchQuery, setPrescriptionSearchQuery] = useState('');
-  const [medicalServiceSearchQuery, setMedicalServiceSearchQuery] = useState('');
-  const [isProductPickerModalOpen, setIsProductPickerModalOpen] = useState(false);
-  const [productPickerTarget, setProductPickerTarget] = useState<'prescription' | 'service' | null>(null);
-  const [productPickerSearch, setProductPickerSearch] = useState('');
-  const [popupSelectedProductId, setPopupSelectedProductId] = useState<string | null>(null);
-  const [popupForm, setPopupForm] = useState({ qty: 1, unit: 'Viên', dosage: '', usage: '', note: '', price: 0 });
-
-
-  // Parsed records from cage.pet.notes
-  const medicalRecordsList = useMemo<MedicalExamRecord[]>(() => {
-    if (!cage.pet?.notes) return [];
-    try {
-      const parsed = JSON.parse(cage.pet.notes);
-      if (parsed && Array.isArray(parsed.medicalRecords)) {
-        return parsed.medicalRecords;
-      }
-    } catch (e) {
-      // Return legacy text notes as a default record
-      return [{
-        id: 'legacy',
-        date: cage.pet.createdAt ? cage.pet.createdAt.slice(0, 10) : new Date().toISOString().slice(0, 10),
-        branch: 'Bệnh viện thú y pet 24h- Cầu Giấy',
-        vetName: 'Bs Nghi',
-        customerSymptoms: 'Bệnh lý cũ',
-        clinicalSigns: {
-          temperature: '',
-          weight: cage.pet.weight ? String(cage.pet.weight) : '',
-          dewormed: '',
-          bloodPressure: '',
-          spo2: '',
-          vaccinated: '',
-          heartRate: '',
-          pulse: '',
-          clinicalManifestation: cage.pet.notes
-        },
-        examinationPackage: {
-          inpatientTreatment: '',
-          medicineSales: '',
-          liquidMedicine: ''
-        },
-        prescriptions: [],
-        services: []
-      }];
-    }
-    return [];
-  }, [cage.pet?.notes, cage.pet?.createdAt, cage.pet?.weight]);
-
-  // Set default selected record when modal opens
-  useEffect(() => {
-    if (isMedicalRecordModalOpen) {
-      if (medicalRecordsList.length > 0) {
-        setSelectedRecordId(medicalRecordsList[0].id);
-      } else {
-        setSelectedRecordId(null);
-      }
-      setIsEditingRecord(false);
-      setEditingRecordData(null);
-    }
-  }, [isMedicalRecordModalOpen, medicalRecordsList]);
 
   // Calculate billing parameters dynamically
   const billingInfo = useMemo(() => {
@@ -399,114 +284,6 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
     ).slice(0, 5);
   }, [products, serviceSearch]);
 
-  // Filter product suggestions for prescription row
-  const filteredProductsForPrescription = useMemo(() => {
-    if (activePrescriptionSearchIdx === null || !editingRecordData) return [];
-    const query = (editingRecordData.prescriptions[activePrescriptionSearchIdx]?.name || '').toLowerCase();
-    if (!query) return [];
-    return products.filter(p =>
-      (p.name || '').toLowerCase().includes(query) ||
-      (p.productCode || '').toLowerCase().includes(query)
-    ).slice(0, 8);
-  }, [products, editingRecordData, activePrescriptionSearchIdx]);
-
-  // Filter product suggestions for services row in edit mode
-  const filteredProductsForServiceTable = useMemo(() => {
-    if (activeServiceSearchIdx === null || !editingRecordData) return [];
-    const query = (editingRecordData.services[activeServiceSearchIdx]?.name || '').toLowerCase();
-    if (!query) return [];
-    return products.filter(p =>
-      (p.name || '').toLowerCase().includes(query) ||
-      (p.productCode || '').toLowerCase().includes(query)
-    ).slice(0, 8);
-  }, [products, editingRecordData, activeServiceSearchIdx]);
-
-  // Filter products for the top-level Prescription search bar
-  const filteredProductsForPrescriptionSearch = useMemo(() => {
-    if (!prescriptionSearchQuery) return [];
-    const query = prescriptionSearchQuery.toLowerCase();
-    return products.filter(p =>
-      (p.name || '').toLowerCase().includes(query) ||
-      (p.productCode || '').toLowerCase().includes(query)
-    ).slice(0, 5);
-  }, [products, prescriptionSearchQuery]);
-
-  // Filter products for the top-level Services search bar in Medical Record
-  const filteredProductsForMedicalServiceSearch = useMemo(() => {
-    if (!medicalServiceSearchQuery) return [];
-    const query = medicalServiceSearchQuery.toLowerCase();
-    return products.filter(p =>
-      (p.name || '').toLowerCase().includes(query) ||
-      (p.productCode || '').toLowerCase().includes(query)
-    ).slice(0, 5);
-  }, [products, medicalServiceSearchQuery]);
-
-  // Handler to add prescription directly from product click
-  const handleAddPrescriptionFromProduct = (prod: any) => {
-    if (!editingRecordData) return;
-    const existingIdx = editingRecordData.prescriptions.findIndex(p => p.name === prod.name);
-    if (existingIdx > -1) {
-      const updated = [...editingRecordData.prescriptions];
-      updated[existingIdx] = {
-        ...updated[existingIdx],
-        qty: updated[existingIdx].qty + 1
-      };
-      setEditingRecordData({
-        ...editingRecordData,
-        prescriptions: updated
-      });
-    } else {
-      setEditingRecordData({
-        ...editingRecordData,
-        prescriptions: [
-          ...editingRecordData.prescriptions,
-          {
-            name: prod.name,
-            qty: 1,
-            unit: prod.unit?.name || 'Viên',
-            dosage: '',
-            usage: '',
-            note: ''
-          }
-        ]
-      });
-    }
-    setPrescriptionSearchQuery('');
-  };
-
-  // Handler to add service directly from product click
-  const handleAddMedicalServiceFromProduct = (prod: any) => {
-    if (!editingRecordData) return;
-    const existingIdx = editingRecordData.services.findIndex(s => s.name === prod.name);
-    const price = Number(prod.basePrice) || 0;
-    if (existingIdx > -1) {
-      const updated = [...editingRecordData.services];
-      updated[existingIdx] = {
-        ...updated[existingIdx],
-        qty: updated[existingIdx].qty + 1,
-        total: (updated[existingIdx].qty + 1) * price
-      };
-      setEditingRecordData({
-        ...editingRecordData,
-        services: updated
-      });
-    } else {
-      setEditingRecordData({
-        ...editingRecordData,
-        services: [
-          ...editingRecordData.services,
-          {
-            name: prod.name,
-            qty: 1,
-            price: price,
-            total: price,
-            note: ''
-          }
-        ]
-      });
-    }
-    setMedicalServiceSearchQuery('');
-  };
   // Fetch rooms list for Transfer cage
   const { data: rooms = [] } = useQuery<Room[]>({
     queryKey: ['roomsForTransfer'],
@@ -645,56 +422,6 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
     } catch (err) {
       console.error(err);
       alert('Có lỗi xảy ra khi thực hiện chuyển chuồng.');
-    }
-  };
-
-  const handleSaveMedicalRecord = async () => {
-    if (!cage.pet?.id || !editingRecordData) {
-      alert('Không tìm thấy thông tin hợp lệ để lưu!');
-      return;
-    }
-    try {
-      // Determine if it is editing or creating
-      const exists = medicalRecordsList.some(r => r.id === editingRecordData.id);
-      let updatedRecords: MedicalExamRecord[];
-      if (exists) {
-        updatedRecords = medicalRecordsList.map(r => r.id === editingRecordData.id ? editingRecordData : r);
-      } else {
-        updatedRecords = [editingRecordData, ...medicalRecordsList];
-      }
-
-      await updatePet(cage.pet.id, {
-        notes: JSON.stringify({ medicalRecords: updatedRecords }),
-        weight: editingRecordData.clinicalSigns.weight ? Number(editingRecordData.clinicalSigns.weight) : undefined
-      });
-
-      await queryClient.invalidateQueries({ queryKey: ['rooms'] });
-      setSelectedRecordId(editingRecordData.id);
-      setIsEditingRecord(false);
-      setEditingRecordData(null);
-      alert('Lưu bệnh án thành công!');
-    } catch (err) {
-      console.error(err);
-      alert('Có lỗi xảy ra khi cập nhật bệnh án.');
-    }
-  };
-
-  const handleDeleteMedicalRecord = async (id: string) => {
-    if (!cage.pet?.id) return;
-    if (!window.confirm('Bạn có chắc chắn muốn xóa bệnh án này?')) return;
-    try {
-      const updatedRecords = medicalRecordsList.filter(r => r.id !== id);
-      await updatePet(cage.pet.id, {
-        notes: JSON.stringify({ medicalRecords: updatedRecords })
-      });
-      await queryClient.invalidateQueries({ queryKey: ['rooms'] });
-      if (selectedRecordId === id) {
-        setSelectedRecordId(updatedRecords.length > 0 ? updatedRecords[0].id : null);
-      }
-      alert('Xóa bệnh án thành công!');
-    } catch (err) {
-      console.error(err);
-      alert('Có lỗi xảy ra khi xóa bệnh án.');
     }
   };
 

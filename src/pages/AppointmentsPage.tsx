@@ -20,6 +20,7 @@ const AppointmentsPage: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState<Appointment | undefined>();
+  const [prefilledDateTime, setPrefilledDateTime] = useState<string | undefined>();
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('calendar');
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -87,6 +88,7 @@ const AppointmentsPage: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointments_calendar'] });
     },
   });
 
@@ -94,6 +96,7 @@ const AppointmentsPage: React.FC = () => {
     mutationFn: (id: string) => deleteAppointment(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointments_calendar'] });
     },
   });
 
@@ -116,11 +119,31 @@ const AppointmentsPage: React.FC = () => {
     }
   };
 
-  const formatDateTime = (dateStr: string) => {
-    const date = new Date(dateStr);
+  const formatDateTime = (dateStr: string, endDateStr?: string) => {
+    const start = new Date(dateStr);
+    const datePart = start.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' });
+    const startTimePart = start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    
+    if (endDateStr) {
+      const end = new Date(endDateStr);
+      const endTimePart = end.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      if (start.toDateString() === end.toDateString()) {
+        return {
+          date: datePart,
+          time: `${startTimePart} - ${endTimePart}`,
+        };
+      } else {
+        const endDatePart = end.toLocaleDateString('vi-VN', { year: 'numeric', month: 'numeric', day: 'numeric' });
+        return {
+          date: `${datePart} - ${endDatePart}`,
+          time: `${startTimePart} - ${endTimePart}`,
+        };
+      }
+    }
+    
     return {
-      date: date.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' }),
-      time: date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+      date: datePart,
+      time: startTimePart,
     };
   };
 
@@ -240,7 +263,7 @@ const AppointmentsPage: React.FC = () => {
                   <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Không tìm thấy công việc nào.</td>
                 </tr>
               ) : filteredAppointments.map((appt) => {
-                const { date, time } = formatDateTime(appt.dateTime);
+                const { date, time } = formatDateTime(appt.dateTime, appt.endDateTime);
                 const statusColors = {
                   PENDING: { bg: 'rgba(245, 158, 11, 0.1)', text: '#d97706', label: 'Chờ khám' },
                   COMPLETED: { bg: 'rgba(16, 185, 129, 0.1)', text: '#059669', label: 'Hoàn thành' },
@@ -268,17 +291,31 @@ const AppointmentsPage: React.FC = () => {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                         <div style={{ fontWeight: '700', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                           <Dog size={16} color="#6366f1" />
-                          {appt.pet?.name || 'Thú cưng đã xóa'} 
-                          <span style={{ fontSize: '0.75rem', fontWeight: '500', color: '#94a3b8' }}>
-                            ({appt.pet?.species === 'Cat' ? 'Mèo' : 'Chó'})
-                          </span>
+                          {!appt.petId ? (
+                            'Không có thú cưng'
+                          ) : (
+                            <>
+                              {appt.pet?.name || 'Thú cưng đã xóa'} 
+                              {appt.pet && (
+                                <span style={{ fontSize: '0.75rem', fontWeight: '500', color: '#94a3b8' }}>
+                                  ({appt.pet.species === 'Cat' ? 'Mèo' : 'Chó'})
+                                </span>
+                              )}
+                            </>
+                          )}
                         </div>
                         <div style={{ fontSize: '0.8rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                           <User size={13} color="#94a3b8" />
-                          {appt.customer?.fullName || 'Khách vãng lai'}
-                          <span style={{ color: '#cbd5e1' }}>|</span>
-                          <Phone size={11} color="#94a3b8" />
-                          {appt.customer?.phone || 'N/A'}
+                          {!appt.customerId ? (
+                            'Khách vãng lai'
+                          ) : (
+                            <>
+                              {appt.customer?.fullName || 'Khách hàng đã xóa'}
+                              <span style={{ color: '#cbd5e1' }}>|</span>
+                              <Phone size={11} color="#94a3b8" />
+                              {appt.customer?.phone || 'N/A'}
+                            </>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -398,6 +435,12 @@ const AppointmentsPage: React.FC = () => {
                 // check if it's today
                 const isToday = new Date().toDateString() === cellDate.toDateString();
                 
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const compareDate = new Date(cellDate);
+                compareDate.setHours(0, 0, 0, 0);
+                const isPast = compareDate < today;
+                
                 const dayAppts = filteredCalendarAppts.filter(appt => {
                   const d = new Date(appt.dateTime);
                   return d.getDate() === date;
@@ -410,7 +453,7 @@ const AppointmentsPage: React.FC = () => {
                   <div 
                     key={`day-${date}`} 
                     style={{ 
-                      backgroundColor: isToday ? '#f0fdf4' : 'white', 
+                      backgroundColor: isToday ? '#f0fdf4' : (isPast ? '#f1f5f9' : 'white'), 
                       minHeight: '120px', 
                       padding: '0.5rem', 
                       display: 'flex', 
@@ -420,6 +463,14 @@ const AppointmentsPage: React.FC = () => {
                     }}
                     onClick={() => {
                       if (!canManage) return; // Không có quyền → không mở modal tạo
+                      const yyyy = cellDate.getFullYear();
+                      const mm = String(cellDate.getMonth() + 1).padStart(2, '0');
+                      const dd = String(cellDate.getDate()).padStart(2, '0');
+                      const now = new Date();
+                      const hh = String(now.getHours()).padStart(2, '0');
+                      const min = String(now.getMinutes()).padStart(2, '0');
+                      
+                      setPrefilledDateTime(`${yyyy}-${mm}-${dd}T${hh}:${min}`);
                       setSelectedAppt(undefined);
                       setIsModalOpen(true);
                     }}
@@ -427,7 +478,7 @@ const AppointmentsPage: React.FC = () => {
                     <div style={{ 
                       fontWeight: '600', 
                       fontSize: '0.875rem', 
-                      color: isToday ? '#16a34a' : '#334155', 
+                      color: isToday ? '#16a34a' : (isPast ? '#94a3b8' : '#334155'), 
                       marginBottom: '0.25rem',
                       display: 'inline-block',
                       width: '24px',
@@ -460,10 +511,13 @@ const AppointmentsPage: React.FC = () => {
                             padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', cursor: 'pointer',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' 
                           }}
-                          title={`${new Date(appt.dateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})} - ${appt.purpose} (${appt.pet?.name})${appt.user ? ` - Phụ trách: ${appt.user.fullName}` : ''}`}
+                          title={`${new Date(appt.dateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}${appt.endDateTime ? ` - ${new Date(appt.endDateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}` : ''} - ${appt.purpose} (${appt.pet?.name || 'Không có thú cưng'})${appt.user ? ` - Phụ trách: ${appt.user.fullName}` : ''}`}
                         >
-                          <span style={{ fontWeight: '700', color: statusColors.text }}>{new Date(appt.dateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}</span>{' '}
-                          {appt.pet?.name}
+                          <span style={{ fontWeight: '700', color: statusColors.text }}>
+                            {new Date(appt.dateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}
+                            {appt.endDateTime && ` - ${new Date(appt.endDateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}`}
+                          </span>{' '}
+                          {appt.pet?.name || 'Không có thú cưng'}
                         </div>
                       )
                     })}
@@ -481,9 +535,10 @@ const AppointmentsPage: React.FC = () => {
 
       <AppointmentModal
         isOpen={isModalOpen}
-        onClose={() => { setIsModalOpen(false); setSelectedAppt(undefined); }}
+        onClose={() => { setIsModalOpen(false); setSelectedAppt(undefined); setPrefilledDateTime(undefined); }}
         onSubmit={handleSubmit}
         appointment={selectedAppt}
+        defaultDateTime={prefilledDateTime}
       />
     </div>
   );

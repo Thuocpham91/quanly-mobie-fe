@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Dog, User, Calendar, Edit2, Trash2, Tag } from 'lucide-react';
+import { Plus, Search, Dog, User, Calendar, Edit2, Trash2, Tag, FileText } from 'lucide-react';
 import { getPets, createPet, updatePet, deletePet } from '../api/pets';
 import { useBranchContext } from '../context/BranchContext';
 import Pagination from '../components/Pagination';
 import PetModal from '../components/PetModal';
+import MedicalRecordModal from '../components/MedicalRecordModal';
 
 const PetsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -14,6 +15,9 @@ const PetsPage: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedPet, setSelectedPet] = useState<any>(null);
+
+  const [isMedicalRecordModalOpen, setIsMedicalRecordModalOpen] = useState(false);
+  const [selectedMedicalRecordPet, setSelectedMedicalRecordPet] = useState<any>(null);
 
   const { data: paginatedData, isLoading } = useQuery({
     queryKey: ['pets', selectedBranchId, page, searchTerm],
@@ -183,6 +187,13 @@ const PetsPage: React.FC = () => {
                   </td>
                   <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                      <button 
+                        onClick={() => { setSelectedMedicalRecordPet(pet); setIsMedicalRecordModalOpen(true); }}
+                        title="Bệnh án"
+                        style={{ padding: '0.4rem', backgroundColor: 'transparent', color: '#f97316', cursor: 'pointer', border: 'none' }}
+                      >
+                        <FileText size={16} />
+                      </button>
                       <button onClick={() => handleEdit(pet)} style={{ padding: '0.4rem', backgroundColor: 'transparent', color: '#64748b', cursor: 'pointer', border: 'none' }}>
                         <Edit2 size={16} />
                       </button>
@@ -211,6 +222,15 @@ const PetsPage: React.FC = () => {
         onClose={() => { setIsModalOpen(false); setSelectedPet(null); }}
         onSubmit={handleSubmit}
         pet={selectedPet}
+      />
+
+      <MedicalRecordModal
+        isOpen={isMedicalRecordModalOpen}
+        onClose={() => { setIsMedicalRecordModalOpen(false); setSelectedMedicalRecordPet(null); }}
+        pet={selectedMedicalRecordPet}
+        onUpdateSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['pets'] });
+        }}
       />
     </div>
   );

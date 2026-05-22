@@ -14,14 +14,15 @@ export type AppointmentStatus = typeof AppointmentStatus[keyof typeof Appointmen
 
 export interface Appointment {
   id: string;
-  petId: string;
+  petId?: string;
   pet?: Pet;
-  customerId: string;
+  customerId?: string;
   customer?: Customer;
   branchId?: string;
   userId?: string;
   user?: any;
   dateTime: string;
+  endDateTime?: string;
   purpose: string;
   status: AppointmentStatus;
   notes?: string;

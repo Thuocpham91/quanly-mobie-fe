@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, Building, AlertCircle, X, User, QrCode, Info, Wallet, Home } from 'lucide-react';
+import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, Building, AlertCircle, X, User, QrCode, Info, Wallet, Home, FileText } from 'lucide-react';
 import inventoryApi from '../api/inventory';
 import { getSalesRank } from '../api/inventory';
 import type { Product } from '../api/inventory';
@@ -10,6 +10,7 @@ import customersApi from '../api/customers';
 import type { Customer } from '../api/customers';
 import { useBranchContext } from '../context/BranchContext';
 import { getRooms, updateCage, CageStatus } from '../api/boarding';
+import MedicalRecordModal from '../components/MedicalRecordModal';
 
 interface CartItem extends Product {
   cartQuantity: number;
@@ -233,6 +234,8 @@ const POSPage: React.FC = () => {
   const [admitActiveTab, setAdmitActiveTab] = useState<'info' | 'time'>('info');
   const [admitSameDay, setAdmitSameDay] = useState(false);
   const [isPetDetailsModalOpen, setIsPetDetailsModalOpen] = useState(false);
+  const [isMedicalRecordModalOpen, setIsMedicalRecordModalOpen] = useState(false);
+  const [selectedMedicalRecordPet, setSelectedMedicalRecordPet] = useState<any>(null);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [isSearchingCustomer, setIsSearchingCustomer] = useState(false);
   const [creditChangeToWallet, setCreditChangeToWallet] = useState<boolean>(false);
@@ -403,6 +406,15 @@ const POSPage: React.FC = () => {
     },
     isSubform = false
   ) => {
+    const dogBreeds = ['Poodle', 'Corgi', 'Phốc Sóc', 'Alaska', 'Golden Retriever', 'Husky', 'Khác'];
+    const catBreeds = ['Mèo Anh lông ngắn', 'Mèo Anh lông dài', 'Mèo Ba Tư', 'Mèo Ta', 'Khác'];
+    const otherBreeds = ['Khác'];
+    const breedsToShow = state.species === 'Chó' ? dogBreeds : (state.species === 'Mèo' ? catBreeds : otherBreeds);
+
+    const breedParts = state.breed.split(' lai ');
+    const primaryBreed = breedParts[0] || '';
+    const secondaryBreed = breedParts[1] || '';
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', color: '#1e293b', fontSize: '0.85rem' }}>
         
@@ -585,6 +597,7 @@ const POSPage: React.FC = () => {
               <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
                 <input
                   type="number"
+                  className="no-spinner"
                   placeholder="Năm"
                   value={state.ageYears}
                   onChange={(e) => state.setAgeYears(e.target.value)}
@@ -596,6 +609,7 @@ const POSPage: React.FC = () => {
                 <span style={{ fontSize: '0.7rem', color: '#64748b' }}>Năm</span>
                 <input
                   type="number"
+                  className="no-spinner"
                   placeholder="Tháng"
                   value={state.ageMonths}
                   onChange={(e) => state.setAgeMonths(e.target.value)}
@@ -610,6 +624,7 @@ const POSPage: React.FC = () => {
               <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
                 <input
                   type="number"
+                  className="no-spinner"
                   placeholder="Ngày"
                   value={state.ageDays}
                   onChange={(e) => state.setAgeDays(e.target.value)}
@@ -632,7 +647,10 @@ const POSPage: React.FC = () => {
             </label>
             <select
               value={state.species}
-              onChange={(e) => state.setSpecies(e.target.value)}
+              onChange={(e) => {
+                state.setSpecies(e.target.value);
+                state.setBreed('');
+              }}
               style={{
                 padding: '0.55rem 0.75rem', borderRadius: '0.375rem',
                 border: '1px solid #cbd5e1', fontSize: '0.8rem', outline: 'none',
@@ -704,8 +722,15 @@ const POSPage: React.FC = () => {
               <span style={{ color: '#ef4444' }}>*</span> Giống:
             </label>
             <select
-              value={state.breed}
-              onChange={(e) => state.setBreed(e.target.value)}
+              value={primaryBreed}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (state.isCrossBreed) {
+                  state.setBreed(val + (secondaryBreed ? ' lai ' + secondaryBreed : ''));
+                } else {
+                  state.setBreed(val);
+                }
+              }}
               style={{
                 padding: '0.55rem 0.75rem', borderRadius: '0.375rem',
                 border: '1px solid #cbd5e1', fontSize: '0.8rem', outline: 'none',
@@ -713,18 +738,32 @@ const POSPage: React.FC = () => {
               }}
             >
               <option value="">--Chọn giống--</option>
-              <option value="Poodle">Poodle</option>
-              <option value="Corgi">Corgi</option>
-              <option value="Phốc Sóc">Phốc Sóc</option>
-              <option value="Alaska">Alaska</option>
-              <option value="Golden Retriever">Golden Retriever</option>
-              <option value="Husky">Husky</option>
-              <option value="Mèo Anh lông ngắn">Mèo Anh lông ngắn</option>
-              <option value="Mèo Anh lông dài">Mèo Anh lông dài</option>
-              <option value="Mèo Ba Tư">Mèo Ba Tư</option>
-              <option value="Mèo Ta">Mèo Ta</option>
-              <option value="Khác">Khác</option>
+              {breedsToShow.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
             </select>
+            {state.isCrossBreed && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.25rem' }}>
+                <span style={{ fontSize: '0.7rem', fontWeight: '700', color: '#64748b' }}>lai với:</span>
+                <select
+                  value={secondaryBreed}
+                  onChange={(e) => {
+                    const sec = e.target.value;
+                    state.setBreed(primaryBreed + (sec ? ' lai ' + sec : ''));
+                  }}
+                  style={{
+                    padding: '0.55rem 0.75rem', borderRadius: '0.375rem',
+                    border: '1px solid #cbd5e1', fontSize: '0.8rem', outline: 'none',
+                    backgroundColor: 'white'
+                  }}
+                >
+                  <option value="">--Chọn giống lai--</option>
+                  {breedsToShow.map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -792,7 +831,13 @@ const POSPage: React.FC = () => {
               <input
                 type="checkbox"
                 checked={state.isCrossBreed}
-                onChange={(e) => state.setIsCrossBreed(e.target.checked)}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  state.setIsCrossBreed(checked);
+                  if (!checked) {
+                    state.setBreed(primaryBreed);
+                  }
+                }}
                 style={{ opacity: 0, width: 0, height: 0 }}
               />
               <span style={{
@@ -1378,222 +1423,238 @@ const POSPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Top half: Products grid */}
-        <div style={{ 
-          flex: 1.1, 
-          display: 'flex', 
-          flexDirection: 'column', 
-          gap: '1rem',
-          minHeight: '260px',
-          overflow: 'hidden'
+        {/* Container for Products and Cart side-by-side */}
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          gap: '1.25rem',
+          overflow: isMobile ? 'visible' : 'hidden',
+          minHeight: 0
         }}>
-          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '0.5rem' : '0' }}>
-            <h1 style={{ fontSize: '1.3rem', fontWeight: '700', color: 'var(--foreground)' }}>Danh sách sản phẩm</h1>
-            <div style={{ position: 'relative', width: isMobile ? '100%' : '300px' }}>
-              <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} size={16} />
-              <input
-                type="text"
-                placeholder="Tìm kiếm sản phẩm..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: '100%', padding: '0.5rem 1rem 0.5rem 2.3rem',
-                  borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none',
-                  fontSize: '0.9rem'
-                }}
-              />
+          {/* Left/Top: Products grid */}
+          <div style={{ 
+            flex: isMobile ? 'none' : '1.3', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '1rem',
+            minHeight: '260px',
+            overflow: isMobile ? 'visible' : 'hidden',
+            height: isMobile ? 'auto' : '100%'
+          }}>
+            <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '0.5rem' : '0' }}>
+              <h1 style={{ fontSize: '1.3rem', fontWeight: '700', color: 'var(--foreground)' }}>Danh sách sản phẩm</h1>
+              <div style={{ position: 'relative', width: isMobile ? '100%' : '300px' }}>
+                <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} size={16} />
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm sản phẩm..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    width: '100%', padding: '0.5rem 1rem 0.5rem 2.3rem',
+                    borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none',
+                    fontSize: '0.9rem'
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem', alignContent: 'start', paddingBottom: '1rem' }}>
+              {isLoading ? (
+                <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Đang tải sản phẩm...</p>
+              ) : filteredProducts.length === 0 ? (
+                <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Không tìm thấy sản phẩm nào.</p>
+              ) : (
+                filteredProducts.map((product, index) => {
+                  const soldCount = salesRank[product.id] || 0;
+                  const isHot = soldCount > 0 && index < 3; // top 3 bestsellers
+                  return (
+                    <div 
+                      key={product.id} 
+                      onClick={() => addToCart(product)}
+                      style={{
+                        backgroundColor: 'var(--card)', 
+                        border: isHot ? '1.5px solid #f97316' : '1px solid var(--border)', 
+                        borderRadius: 'var(--radius)',
+                        padding: '0.75rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '0.4rem',
+                        transition: 'transform 0.1s, box-shadow 0.1s', userSelect: 'none',
+                        position: 'relative'
+                      }}
+                      onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.98)'}
+                      onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                      {/* Bestseller badge */}
+                      {isHot && (
+                        <div style={{
+                          position: 'absolute', top: '-8px', right: '8px',
+                          backgroundColor: '#f97316', color: 'white',
+                          fontSize: '0.65rem', fontWeight: '700',
+                          padding: '0.1rem 0.4rem', borderRadius: '999px',
+                          display: 'flex', alignItems: 'center', gap: '0.2rem',
+                          boxShadow: '0 2px 6px rgba(249,115,22,0.4)'
+                        }}>
+                          🔥 Bán chạy
+                        </div>
+                      )}
+                      <div style={{ height: '80px', backgroundColor: '#f8fafc', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justify: 'center', overflow: 'hidden', position: 'relative', border: '1px solid #f1f5f9' }}>
+                        {product.imageUrl ? (
+                          <img src={product.imageUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <ShoppingCart size={24} style={{ color: '#94a3b8', opacity: 0.5 }} />
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProductForDetails(product);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: '6px',
+                            right: '6px',
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '50%',
+                            width: '26px',
+                            height: '26px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#2563eb',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
+                            zIndex: 5,
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#2563eb';
+                            e.currentTarget.style.color = 'white';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
+                            e.currentTarget.style.color = '#2563eb';
+                          }}
+                          title="Xem chi tiết sản phẩm"
+                        >
+                          <Info size={14} />
+                        </button>
+                      </div>
+                      <div style={{ fontWeight: '600', fontSize: '0.85rem', color: 'var(--foreground)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', height: '2.4rem', lineHeight: '1.2rem' }}>
+                        {product.name}
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>{product.productCode || 'N/A'}</span>
+                        <span style={{ 
+                          fontSize: '0.75rem', 
+                          fontWeight: '700', 
+                          color: (stockMap[product.id] || 0) > 0 ? '#10b981' : '#ef4444'
+                        }}>
+                          Tồn: {stockMap[product.id] || 0}
+                        </span>
+                      </div>
+                      {soldCount > 0 && (
+                        <div style={{ fontSize: '0.65rem', color: '#f97316', fontWeight: '600', textAlign: 'right', marginTop: '-0.2rem' }}>
+                          Đã bán: {soldCount}
+                        </div>
+                      )}
+                      <div style={{ fontWeight: '700', color: 'var(--primary)', marginTop: 'auto', paddingTop: '0.25rem', fontSize: '0.9rem' }}>
+                        {formatCurrency(product.basePrice || 0)}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem', alignContent: 'start', paddingBottom: '1rem' }}>
-            {isLoading ? (
-              <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Đang tải sản phẩm...</p>
-            ) : filteredProducts.length === 0 ? (
-              <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Không tìm thấy sản phẩm nào.</p>
-            ) : (
-              filteredProducts.map((product, index) => {
-                const soldCount = salesRank[product.id] || 0;
-                const isHot = soldCount > 0 && index < 3; // top 3 bestsellers
-                return (
-                  <div 
-                    key={product.id} 
-                    onClick={() => addToCart(product)}
-                    style={{
-                      backgroundColor: 'var(--card)', 
-                      border: isHot ? '1.5px solid #f97316' : '1px solid var(--border)', 
-                      borderRadius: 'var(--radius)',
-                      padding: '0.75rem', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: '0.4rem',
-                      transition: 'transform 0.1s, box-shadow 0.1s', userSelect: 'none',
-                      position: 'relative'
-                    }}
-                    onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.98)'}
-                    onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                  >
-                    {/* Bestseller badge */}
-                    {isHot && (
-                      <div style={{
-                        position: 'absolute', top: '-8px', right: '8px',
-                        backgroundColor: '#f97316', color: 'white',
-                        fontSize: '0.65rem', fontWeight: '700',
-                        padding: '0.1rem 0.4rem', borderRadius: '999px',
-                        display: 'flex', alignItems: 'center', gap: '0.2rem',
-                        boxShadow: '0 2px 6px rgba(249,115,22,0.4)'
-                      }}>
-                        🔥 Bán chạy
-                      </div>
-                    )}
-                    <div style={{ height: '80px', backgroundColor: '#f8fafc', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative', border: '1px solid #f1f5f9' }}>
-                      {product.imageUrl ? (
-                        <img src={product.imageUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        <ShoppingCart size={24} style={{ color: '#94a3b8', opacity: 0.5 }} />
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedProductForDetails(product);
-                        }}
-                        style={{
-                          position: 'absolute',
-                          top: '6px',
-                          right: '6px',
-                          backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '50%',
-                          width: '26px',
-                          height: '26px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#2563eb',
-                          cursor: 'pointer',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.08)',
-                          zIndex: 5,
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = '#2563eb';
-                          e.currentTarget.style.color = 'white';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
-                          e.currentTarget.style.color = '#2563eb';
-                        }}
-                        title="Xem chi tiết sản phẩm"
-                      >
-                        <Info size={14} />
-                      </button>
-                    </div>
-                    <div style={{ fontWeight: '600', fontSize: '0.85rem', color: 'var(--foreground)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', height: '2.4rem', lineHeight: '1.2rem' }}>
-                      {product.name}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>{product.productCode || 'N/A'}</span>
-                      <span style={{ 
-                        fontSize: '0.75rem', 
-                        fontWeight: '700', 
-                        color: (stockMap[product.id] || 0) > 0 ? '#10b981' : '#ef4444'
-                      }}>
-                        Tồn: {stockMap[product.id] || 0}
-                      </span>
-                    </div>
-                    {soldCount > 0 && (
-                      <div style={{ fontSize: '0.65rem', color: '#f97316', fontWeight: '600', textAlign: 'right', marginTop: '-0.2rem' }}>
-                        Đã bán: {soldCount}
-                      </div>
-                    )}
-                    <div style={{ fontWeight: '700', color: 'var(--primary)', marginTop: 'auto', paddingTop: '0.25rem', fontSize: '0.9rem' }}>
-                      {formatCurrency(product.basePrice || 0)}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
+          {/* Vertical/Horizontal divider line */}
+          <div style={{ 
+            borderLeft: isMobile ? 'none' : '2px solid var(--border)', 
+            borderTop: isMobile ? '2px solid var(--border)' : 'none',
+            margin: isMobile ? '0.15rem 0' : '0 0.15rem' 
+          }}></div>
 
-        {/* Divider line between Products and Cart */}
-        <div style={{ borderTop: '2px solid var(--border)', margin: '0.15rem 0' }}></div>
+          {/* Right/Bottom: Purchased Items List (Cart) */}
+          <div style={{ 
+            flex: isMobile ? 'none' : '1', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            backgroundColor: 'var(--card)', 
+            borderRadius: 'var(--radius)', 
+            border: '1px solid var(--border)', 
+            overflow: isMobile ? 'visible' : 'hidden', 
+            boxShadow: 'var(--shadow)',
+            height: isMobile ? 'auto' : '100%'
+          }}>
+            <div style={{ padding: '0.6rem 1rem', borderBottom: '1px solid var(--border)', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <ShoppingCart style={{ color: 'var(--primary)' }} size={18} />
+              <h2 style={{ fontSize: '1.05rem', fontWeight: '700', color: 'var(--foreground)' }}>Danh sách hàng mua</h2>
+              {cart.length > 0 && (
+                <span style={{ backgroundColor: 'var(--primary)', color: 'white', padding: '0.1rem 0.6rem', borderRadius: '1rem', fontSize: '0.75rem', marginLeft: 'auto', fontWeight: '600' }}>
+                  {cart.length}
+                </span>
+              )}
+            </div>
 
-        {/* Bottom half: Purchased Items List (Cart) */}
-        <div style={{ 
-          flex: 1.1, 
-          display: 'flex', 
-          flexDirection: 'column', 
-          backgroundColor: 'var(--card)', 
-          borderRadius: 'var(--radius)', 
-          border: '1px solid var(--border)', 
-          overflow: 'hidden', 
-          boxShadow: 'var(--shadow)' 
-        }}>
-          <div style={{ padding: '0.6rem 1.25rem', borderBottom: '1px solid var(--border)', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <ShoppingCart style={{ color: 'var(--primary)' }} size={18} />
-            <h2 style={{ fontSize: '1.05rem', fontWeight: '700', color: 'var(--foreground)' }}>Danh sách hàng mua</h2>
-            {cart.length > 0 && (
-              <span style={{ backgroundColor: 'var(--primary)', color: 'white', padding: '0.1rem 0.6rem', borderRadius: '1rem', fontSize: '0.75rem', marginLeft: 'auto', fontWeight: '600' }}>
-                {cart.length} mặt hàng
-              </span>
-            )}
-          </div>
-
-          <div style={{ flex: 1, overflowY: 'auto', padding: '1rem', display: 'flex', flexDirection: 'column' }}>
-            {cart.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', gap: '0.75rem', minHeight: '120px' }}>
-                <ShoppingCart size={36} style={{ opacity: 0.5 }} />
-                <p style={{ fontSize: '0.85rem' }}>Chưa chọn mặt hàng nào</p>
-              </div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)', color: '#64748b', fontSize: '0.8rem', fontWeight: '600' }}>
-                    <th style={{ padding: '0.5rem 0.75rem' }}>Tên sản phẩm</th>
-                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>Giá bán</th>
-                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>Số lượng</th>
-                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'right' }}>Thành tiền</th>
-                    <th style={{ padding: '0.5rem 0.75rem', textAlign: 'center' }}>Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cart.map(item => (
-                    <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '0.85rem' }}>
-                      <td style={{ padding: '0.6rem 0.75rem' }}>
-                        <div style={{ fontWeight: '600', color: 'var(--foreground)' }}>{item.name}</div>
-                        <div style={{ fontSize: '0.7rem', color: '#64748b', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                          <span>{item.productCode || 'N/A'}</span>
-                          <span style={{ 
-                            fontSize: '0.7rem', 
-                            fontWeight: '600', 
-                            color: (stockMap[item.id] || 0) > 0 ? '#10b981' : '#ef4444' 
-                          }}>
-                            (Tồn: {stockMap[item.id] || 0})
-                          </span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: '500' }}>
-                        {formatCurrency(item.basePrice || 0)}
-                      </td>
-                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: '1px solid var(--border)', borderRadius: '0.4rem', padding: '0.15rem' }}>
-                          <button onClick={() => updateQuantity(item.id, -1)} style={{ padding: '0.15rem', backgroundColor: 'transparent', color: '#64748b', border: 'none', cursor: 'pointer' }}><Minus size={11}/></button>
-                          <span style={{ minWidth: '1.25rem', textAlign: 'center', fontSize: '0.8rem', fontWeight: '600' }}>{item.cartQuantity}</span>
-                          <button onClick={() => updateQuantity(item.id, 1)} style={{ padding: '0.15rem', backgroundColor: 'transparent', color: '#64748b', border: 'none', cursor: 'pointer' }}><Plus size={11}/></button>
-                        </div>
-                      </td>
-                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: '700', color: 'var(--primary)' }}>
-                        {formatCurrency((item.basePrice || 0) * item.cartQuantity)}
-                      </td>
-                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'center' }}>
-                        <button onClick={() => removeFromCart(item.id)} style={{ padding: '0.2rem', backgroundColor: 'transparent', border: 'none', color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem', cursor: 'pointer', fontSize: '0.8rem' }}>
-                          <Trash2 size={12}/> Xóa
-                        </button>
-                      </td>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0.75rem 0.5rem', display: 'flex', flexDirection: 'column' }}>
+              {cart.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8', gap: '0.75rem', minHeight: '120px' }}>
+                  <ShoppingCart size={36} style={{ opacity: 0.5 }} />
+                  <p style={{ fontSize: '0.85rem' }}>Chưa chọn mặt hàng nào</p>
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)', color: '#64748b', fontSize: '0.8rem', fontWeight: '600' }}>
+                      <th style={{ padding: '0.5rem 0.4rem' }}>Tên sản phẩm</th>
+                      <th style={{ padding: '0.5rem 0.4rem', textAlign: 'right' }}>Giá</th>
+                      <th style={{ padding: '0.5rem 0.4rem', textAlign: 'center' }}>SL</th>
+                      <th style={{ padding: '0.5rem 0.4rem', textAlign: 'right' }}>Tổng</th>
+                      <th style={{ padding: '0.5rem 0.4rem', textAlign: 'center' }}>Thao tác</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                  </thead>
+                  <tbody>
+                    {cart.map(item => (
+                      <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '0.82rem' }}>
+                        <td style={{ padding: '0.5rem 0.4rem' }}>
+                          <div style={{ fontWeight: '600', color: 'var(--foreground)' }}>{item.name}</div>
+                          <div style={{ fontSize: '0.68rem', color: '#64748b', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                            <span>{item.productCode || 'N/A'}</span>
+                            <span style={{ 
+                              fontSize: '0.68rem', 
+                              fontWeight: '600', 
+                              color: (stockMap[item.id] || 0) > 0 ? '#10b981' : '#ef4444' 
+                            }}>
+                              (Tồn: {stockMap[item.id] || 0})
+                            </span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '0.5rem 0.4rem', textAlign: 'right', fontWeight: '500', whiteSpace: 'nowrap' }}>
+                          {formatCurrency(item.basePrice || 0)}
+                        </td>
+                        <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', border: '1px solid var(--border)', borderRadius: '0.4rem', padding: '0.1rem' }}>
+                            <button onClick={() => updateQuantity(item.id, -1)} style={{ padding: '0.1rem', backgroundColor: 'transparent', color: '#64748b', border: 'none', cursor: 'pointer' }}><Minus size={10}/></button>
+                            <span style={{ minWidth: '1rem', textAlign: 'center', fontSize: '0.78rem', fontWeight: '600' }}>{item.cartQuantity}</span>
+                            <button onClick={() => updateQuantity(item.id, 1)} style={{ padding: '0.1rem', backgroundColor: 'transparent', color: '#64748b', border: 'none', cursor: 'pointer' }}><Plus size={10}/></button>
+                          </div>
+                        </td>
+                        <td style={{ padding: '0.5rem 0.4rem', textAlign: 'right', fontWeight: '700', color: 'var(--primary)', whiteSpace: 'nowrap' }}>
+                          {formatCurrency((item.basePrice || 0) * item.cartQuantity)}
+                        </td>
+                        <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center' }}>
+                          <button onClick={() => removeFromCart(item.id)} style={{ padding: '0.15rem', backgroundColor: 'transparent', border: 'none', color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: '0.1rem', cursor: 'pointer', fontSize: '0.75rem' }}>
+                            <Trash2 size={11}/>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
           </div>
         </div>
 
@@ -3264,8 +3325,22 @@ const POSPage: React.FC = () => {
 
                 </div>
 
-                <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end' }}>
-                  <button type="button" onClick={() => setIsPetDetailsModalOpen(false)} style={{ padding: '0.55rem 1.5rem', borderRadius: '0.5rem', fontWeight: '600', backgroundColor: '#3b82f6', color: 'white', border: 'none', cursor: 'pointer', fontSize: '0.85rem' }}>
+                <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMedicalRecordPet(pet);
+                      setIsMedicalRecordModalOpen(true);
+                    }}
+                    style={{
+                      padding: '0.55rem 1.5rem', borderRadius: '0.5rem', fontWeight: '600',
+                      backgroundColor: '#f97316', color: 'white', border: 'none', cursor: 'pointer',
+                      fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem'
+                    }}
+                  >
+                    <FileText size={16} /> Bệnh án
+                  </button>
+                  <button type="button" onClick={() => setIsPetDetailsModalOpen(false)} style={{ padding: '0.55rem 1.5rem', borderRadius: '0.5rem', fontWeight: '600', backgroundColor: '#64748b', color: 'white', border: 'none', cursor: 'pointer', fontSize: '0.85rem' }}>
                     Đóng
                   </button>
                 </div>
@@ -3488,6 +3563,19 @@ const POSPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {isMedicalRecordModalOpen && (
+        <MedicalRecordModal
+          isOpen={isMedicalRecordModalOpen}
+          onClose={() => {
+            setIsMedicalRecordModalOpen(false);
+            setSelectedMedicalRecordPet(null);
+          }}
+          pet={selectedMedicalRecordPet}
+          onUpdateSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['pets', selectedCustomer?.id] });
+          }}
+        />
       )}
     </div>
   );

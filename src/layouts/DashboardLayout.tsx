@@ -149,6 +149,14 @@ const DashboardLayout: React.FC = () => {
 
   const allMenuGroups = [
     {
+      label: 'Bán hàng',
+      icon: <ShoppingCart size={18} />,
+      items: [
+        { path: '/admin/pos',    icon: <ShoppingCart size={18} />, label: 'Bán hàng (POS)',      permission: 'sales.create' },
+        { path: '/admin/orders', icon: <ShoppingBag size={18} />,  label: 'Lịch sử đơn hàng',   permission: 'history.view' },
+      ]
+    },
+    {
       label: 'Tổng quan',
       icon: <LayoutDashboard size={18} />,
       items: [
@@ -157,14 +165,6 @@ const DashboardLayout: React.FC = () => {
         { path: '/admin/pets',         icon: <Dog size={18} />,             label: t('common.pets'),          permission: 'pets.view' },
         { path: '/admin/appointments', icon: <Calendar size={18} />,        label: 'Công việc',           permission: 'appointments.view' },
         { path: '/admin/boarding',     icon: <Box size={18} />,             label: t('common.boarding'),      permission: 'boarding.view' },
-      ]
-    },
-    {
-      label: 'Bán hàng',
-      icon: <ShoppingCart size={18} />,
-      items: [
-        { path: '/admin/pos',    icon: <ShoppingCart size={18} />, label: 'Bán hàng (POS)',      permission: 'sales.create' },
-        { path: '/admin/orders', icon: <ShoppingBag size={18} />,  label: 'Lịch sử đơn hàng',   permission: 'history.view' },
       ]
     },
     {

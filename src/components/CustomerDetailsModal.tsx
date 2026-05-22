@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, User, Phone, Mail, MapPin, Wallet, Plus, Calendar, Dog, Edit, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { X, User, Phone, Mail, MapPin, Wallet, Plus, Calendar, Dog, Edit, Trash2, CheckCircle, XCircle, FileText } from 'lucide-react';
 import { type Customer, topUpWallet } from '../api/customers';
 import { getPetsByOwner, createPet, updatePet, deletePet } from '../api/pets';
 import { getCustomerAppointments, createAppointment, updateAppointment } from '../api/appointments';
 import { getOrders } from '../api/orders';
 import PetModal from './PetModal';
 import AppointmentModal from './AppointmentModal';
+import MedicalRecordModal from './MedicalRecordModal';
 import { ClipboardList } from 'lucide-react';
 
 interface CustomerDetailsModalProps {
@@ -26,6 +27,9 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
 
   const [isApptModalOpen, setIsApptModalOpen] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState<any>(null);
+
+  const [isMedicalRecordModalOpen, setIsMedicalRecordModalOpen] = useState(false);
+  const [selectedMedicalRecordPet, setSelectedMedicalRecordPet] = useState<any>(null);
 
   // Topup variable
   const [showTopup, setShowTopup] = useState(false);
@@ -394,6 +398,13 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                             </div>
                             
                             <div style={{ display: 'flex', gap: '0.25rem' }}>
+                              <button 
+                                onClick={() => { setSelectedMedicalRecordPet(p); setIsMedicalRecordModalOpen(true); }} 
+                                title="Bệnh án"
+                                style={{ padding: '0.4rem', border: 'none', backgroundColor: 'transparent', color: '#f97316', cursor: 'pointer' }}
+                              >
+                                <FileText size={15} />
+                              </button>
                               <button onClick={() => { setSelectedPet(p); setIsPetModalOpen(true); }} style={{ padding: '0.4rem', border: 'none', backgroundColor: 'transparent', color: '#64748b', cursor: 'pointer' }}>
                                 <Edit size={15} />
                               </button>
@@ -482,10 +493,11 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                   <span style={{ fontWeight: '700', color: '#1e293b' }}>
                                     {apptDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                    {appt.endDateTime && ` - ${new Date(appt.endDateTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`}
                                   </span>
                                   <span style={{ color: '#94a3b8' }}>•</span>
                                   <span style={{ fontWeight: '600', color: '#4f46e5' }}>
-                                    Thú cưng: {appt.pet?.name || 'Chưa rõ'}
+                                    Thú cưng: {appt.petId ? (appt.pet?.name || 'Thú cưng đã xóa') : 'Không chọn'}
                                   </span>
                                 </div>
                                 <div style={{ fontSize: '0.875rem', color: '#475569', marginTop: '0.15rem' }}>
@@ -625,6 +637,17 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
         onSubmit={handleApptSubmit}
         customerId={customerId}
         appointment={selectedAppt}
+      />
+
+      {/* Medical Record Modal */}
+      <MedicalRecordModal
+        isOpen={isMedicalRecordModalOpen}
+        onClose={() => { setIsMedicalRecordModalOpen(false); setSelectedMedicalRecordPet(null); }}
+        pet={selectedMedicalRecordPet}
+        onUpdateSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['customerPets', customerId] });
+          queryClient.invalidateQueries({ queryKey: ['pets'] });
+        }}
       />
 
     </div>

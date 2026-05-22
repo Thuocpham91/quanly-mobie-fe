@@ -17,6 +17,7 @@ interface AppointmentModalProps {
   customerId?: string; // Prefilled if opened from customer details
   appointment?: Appointment; // Prefilled if editing
   initialNotes?: string;
+  defaultDateTime?: string; // Prefilled if clicked from calendar
 }
 
 const AppointmentModal: React.FC<AppointmentModalProps> = ({
@@ -26,6 +27,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
   customerId,
   appointment,
   initialNotes,
+  defaultDateTime,
 }) => {
   const { selectedBranchId } = useBranchContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -34,6 +36,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const [custSearch, setCustSearch] = useState('');
   const [selectedCustId, setSelectedCustId] = useState<string>(customerId || '');
   const [selectedCustName, setSelectedCustName] = useState<string>('');
+  const [hasClearedPet, setHasClearedPet] = useState(false);
 
   const { data: customerData } = useQuery({
     queryKey: ['searchCustomersForAppt', custSearch],
@@ -62,6 +65,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
     petId: '',
     branchId: selectedBranchId || '',
     dateTime: '',
+    endDateTime: '',
     purpose: 'Khám tổng quát',
     notes: initialNotes || '',
     userId: '',
@@ -78,22 +82,26 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
   useEffect(() => {
     if (appointment) {
       setFormData({
-        petId: appointment.petId,
+        petId: appointment.petId || '',
         branchId: appointment.branchId || selectedBranchId || '',
         dateTime: appointment.dateTime ? appointment.dateTime.substring(0, 16) : '',
+        endDateTime: appointment.endDateTime ? appointment.endDateTime.substring(0, 16) : '',
         purpose: appointment.purpose || 'Khám tổng quát',
         notes: appointment.notes || '',
         userId: appointment.userId || '',
       });
-      setSelectedCustId(appointment.customerId);
+      setSelectedCustId(appointment.customerId || '');
       if (appointment.customer) {
         setSelectedCustName(appointment.customer.fullName);
+      } else {
+        setSelectedCustName('');
       }
     } else {
       setFormData({
         petId: '',
         branchId: selectedBranchId || '',
-        dateTime: '',
+        dateTime: defaultDateTime || '',
+        endDateTime: '',
         purpose: 'Khám tổng quát',
         notes: initialNotes || '',
         userId: '',
@@ -102,30 +110,42 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
       setSelectedCustName('');
       setCustSearch('');
     }
-  }, [appointment, isOpen, customerId, selectedBranchId, initialNotes]);
+  }, [appointment, isOpen, customerId, selectedBranchId, initialNotes, defaultDateTime]);
+
+  // Reset hasClearedPet and petId when customer changes
+  useEffect(() => {
+    if (!appointment) {
+      setHasClearedPet(false);
+      setFormData(prev => ({ ...prev, petId: '' }));
+    }
+  }, [selectedCustId, appointment]);
 
   // Set first pet when pets list is loaded
   useEffect(() => {
-    if (pets && pets.length > 0 && !formData.petId) {
+    if (pets && pets.length > 0 && !formData.petId && !hasClearedPet && !appointment) {
       setFormData(prev => ({ ...prev, petId: pets[0].id }));
     }
-  }, [pets, formData.petId]);
+  }, [pets, formData.petId, hasClearedPet, appointment]);
 
   if (!isOpen) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    if (name === 'petId') {
+      if (value === '') {
+        setHasClearedPet(true);
+      } else {
+        setHasClearedPet(false);
+      }
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCustId) {
-      alert('Vui lòng chọn khách hàng!');
-      return;
-    }
-    if (!formData.petId) {
-      alert('Vui lòng chọn thú cưng!');
+
+    if (formData.endDateTime && formData.dateTime && new Date(formData.endDateTime) <= new Date(formData.dateTime)) {
+      alert('Ngày giờ kết thúc phải sau ngày giờ bắt đầu!');
       return;
     }
 
@@ -134,8 +154,10 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
       const payload = {
         ...formData,
         userId: formData.userId || undefined,
-        customerId: selectedCustId,
+        customerId: selectedCustId || null,
+        petId: formData.petId || null,
         dateTime: new Date(formData.dateTime).toISOString(),
+        endDateTime: formData.endDateTime ? new Date(formData.endDateTime).toISOString() : undefined,
       };
       await onSubmit(payload);
       onClose();
@@ -174,7 +196,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
           {!customerId && !appointment && (
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                <span style={{color: '#ef4444'}}>*</span> Khách hàng
+                Khách hàng (không bắt buộc)
               </label>
               {selectedCustId ? (
                 <div style={{
@@ -238,14 +260,13 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
           {/* Pet Selection */}
           <div>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-              <span style={{color: '#ef4444'}}>*</span> Chọn thú cưng
+              Chọn thú cưng (không bắt buộc)
             </label>
             <select
               name="petId"
               value={formData.petId}
               onChange={handleChange}
               disabled={!selectedCustId}
-              required
               style={{
                 width: '100%', padding: '0.75rem 1rem',
                 borderRadius: '0.75rem', border: '1px solid var(--border)', outline: 'none',
@@ -253,13 +274,14 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
               }}
             >
               {!selectedCustId ? (
-                <option value="">Vui lòng chọn khách hàng trước</option>
-              ) : pets && pets.length > 0 ? (
-                pets.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.species})</option>
-                ))
+                <option value="">-- Không chọn thú cưng --</option>
               ) : (
-                <option value="">Khách hàng này chưa có thú cưng nào</option>
+                <>
+                  <option value="">-- Không chọn thú cưng --</option>
+                  {pets && pets.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.species})</option>
+                  ))}
+                </>
               )}
             </select>
           </div>
@@ -267,7 +289,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                <span style={{color: '#ef4444'}}>*</span> Ngày & Giờ hẹn
+                <span style={{color: '#ef4444'}}>*</span> Từ ngày & Giờ
               </label>
               <input
                 type="datetime-local"
@@ -281,6 +303,24 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 }}
               />
             </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+                Đến ngày & Giờ
+              </label>
+              <input
+                type="datetime-local"
+                name="endDateTime"
+                value={formData.endDateTime}
+                onChange={handleChange}
+                style={{
+                  width: '100%', padding: '0.75rem 1rem',
+                  borderRadius: '0.75rem', border: '1px solid var(--border)', outline: 'none'
+                }}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
                 <span style={{color: '#ef4444'}}>*</span> Chi nhánh hẹn
@@ -299,6 +339,26 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 <option value="">Chọn chi nhánh</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+                Nhân viên thực hiện
+              </label>
+              <select
+                name="userId"
+                value={formData.userId}
+                onChange={handleChange}
+                style={{
+                  width: '100%', padding: '0.75rem 1rem',
+                  borderRadius: '0.75rem', border: '1px solid var(--border)', outline: 'none',
+                  backgroundColor: 'white'
+                }}
+              >
+                <option value="">-- Chưa giao việc --</option>
+                {branchUsers.map((u: any) => (
+                  <option key={u.id} value={u.id}>{u.fullName} ({u.email})</option>
                 ))}
               </select>
             </div>
@@ -325,27 +385,6 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
               <option value="Spa & Grooming">Tắm rửa / Cắt tỉa lông (Spa)</option>
               <option value="Lưu trú (Boarding)">Gửi thú cưng (Boarding)</option>
               <option value="Khác">Khác</option>
-            </select>
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-              Nhân viên thực hiện
-            </label>
-            <select
-              name="userId"
-              value={formData.userId}
-              onChange={handleChange}
-              style={{
-                width: '100%', padding: '0.75rem 1rem',
-                borderRadius: '0.75rem', border: '1px solid var(--border)', outline: 'none',
-                backgroundColor: 'white'
-              }}
-            >
-              <option value="">-- Chưa giao việc --</option>
-              {branchUsers.map((u: any) => (
-                <option key={u.id} value={u.id}>{u.fullName} ({u.email})</option>
-              ))}
             </select>
           </div>
 
