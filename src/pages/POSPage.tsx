@@ -1498,7 +1498,7 @@ const POSPage: React.FC = () => {
                           🔥 Bán chạy
                         </div>
                       )}
-                      <div style={{ height: '80px', backgroundColor: '#f8fafc', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justify: 'center', overflow: 'hidden', position: 'relative', border: '1px solid #f1f5f9' }}>
+                      <div style={{ height: '80px', backgroundColor: '#f8fafc', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative', border: '1px solid #f1f5f9' }}>
                         {product.imageUrl ? (
                           <img src={product.imageUrl} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         ) : (
