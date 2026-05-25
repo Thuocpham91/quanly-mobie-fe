@@ -21,7 +21,11 @@ const PetsPage: React.FC = () => {
 
   const { data: paginatedData, isLoading } = useQuery({
     queryKey: ['pets', selectedBranchId, page, searchTerm],
-    queryFn: () => getPets(selectedBranchId, page, 10),
+    queryFn: () => {
+      const rawBranchId = selectedBranchId || localStorage.getItem('selectedBranchId');
+      const branchId = (!rawBranchId || rawBranchId === 'undefined' || rawBranchId === 'null') ? undefined : rawBranchId;
+      return getPets(branchId, page, 10);
+    },
   });
 
   const pets = paginatedData?.data || [];
@@ -40,9 +44,11 @@ const PetsPage: React.FC = () => {
 
   const petMutation = useMutation({
     mutationFn: async ({ id, data }: { id?: string; data: any }) => {
+      const rawBranchId = selectedBranchId || localStorage.getItem('selectedBranchId');
+      const branchId = (!rawBranchId || rawBranchId === 'undefined' || rawBranchId === 'null') ? undefined : rawBranchId;
       const payload = {
         ...data,
-        branchId: selectedBranchId || undefined,
+        branchId,
       };
       if (id) {
         return updatePet(id, payload);

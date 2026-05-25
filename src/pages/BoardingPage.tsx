@@ -131,10 +131,19 @@ const BoardingPage: React.FC = () => {
     return updated;
   };
 
+  const activeCage = useMemo(() => {
+    if (!selectedCageForDetails) return null;
+    for (const room of rooms) {
+      const found = (room.cages || []).find(c => c.id === selectedCageForDetails.id);
+      if (found) return found;
+    }
+    return null;
+  }, [rooms, selectedCageForDetails]);
+
   if (selectedCageForDetails) {
     return (
       <CageDetailView
-        cage={selectedCageForDetails}
+        cage={activeCage || selectedCageForDetails}
         onBack={() => setSelectedCageForDetails(null)}
         onUpdateCage={handleUpdateCageDetails}
       />
@@ -380,7 +389,23 @@ const BoardingPage: React.FC = () => {
                               </div>
                               <div style={{ flex: 1, fontSize: '0.75rem', color: '#4b5563' }}>
                                 <div style={{ fontWeight: '600', color: '#1f2937', marginBottom: '0.25rem' }}>{cage.pet.owner?.fullName || 'Khách hàng'}</div>
-                                <div>{cage.pet.name} - {cage.pet.species || 'Chó/Mèo'} - {cage.pet.weight || '--'}kg</div>
+                                {(() => {
+                                  const getNotesData = (rawNotes?: string) => {
+                                    if (!rawNotes) return { additionalPets: [] };
+                                    try {
+                                      if (rawNotes.trim().startsWith('{')) {
+                                        return JSON.parse(rawNotes);
+                                      }
+                                    } catch (e) {}
+                                    return { additionalPets: [] };
+                                  };
+                                  const notesData = getNotesData(cage.notes);
+                                  const additionalPets = notesData.additionalPets || [];
+                                  const allPetNames = [cage.pet.name, ...additionalPets.map((p: any) => p.name)].filter(Boolean).join(', ');
+                                  return (
+                                    <div>{allPetNames} - {cage.pet.species || 'Chó/Mèo'} - {cage.pet.weight || '--'}kg</div>
+                                  );
+                                })()}
                                 <div>Ngày lưu: {cage.updatedAt ? new Date(cage.updatedAt).toLocaleDateString() : '--'}</div>
                                 <div style={{ fontWeight: cage.status === CageStatus.OVERDUE ? '700' : 'normal', color: cage.status === CageStatus.OVERDUE ? '#ef4444' : '#4b5563' }}>
                                   Trạng thái: {cage.status === CageStatus.OVERDUE ? 'QUÁ HẠN!' : cage.status === CageStatus.DEPOSITED ? 'ĐÃ CỌC' : cage.status === CageStatus.CHECKOUT ? 'XUẤT CHUỒNG' : 'ĐANG Ở'}

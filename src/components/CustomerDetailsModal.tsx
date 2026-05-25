@@ -9,6 +9,7 @@ import PetModal from './PetModal';
 import AppointmentModal from './AppointmentModal';
 import MedicalRecordModal from './MedicalRecordModal';
 import { ClipboardList } from 'lucide-react';
+import { useBranchContext } from '../context/BranchContext';
 
 interface CustomerDetailsModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ interface CustomerDetailsModalProps {
 }
 
 const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onClose, customer }) => {
+  const { selectedBranchId } = useBranchContext();
   const [activeTab, setActiveTab] = useState<'pets' | 'appointments' | 'services'>('pets');
   const queryClient = useQueryClient();
   const customerId = customer.id;
@@ -79,10 +81,16 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
 
   const petMutation = useMutation({
     mutationFn: async ({ id, data }: { id?: string; data: any }) => {
+      const rawBranchId = selectedBranchId || localStorage.getItem('selectedBranchId');
+      const branchId = (!rawBranchId || rawBranchId === 'undefined' || rawBranchId === 'null') ? undefined : rawBranchId;
+      const payload = {
+        ...data,
+        branchId,
+      };
       if (id) {
-        return updatePet(id, data);
+        return updatePet(id, payload);
       } else {
-        return createPet(data);
+        return createPet(payload);
       }
     },
     onSuccess: () => {

@@ -8,6 +8,10 @@ import { type Cage, CageStatus, getRooms, type Room } from '../api/boarding';
 import { topUpWallet } from '../api/customers';
 import BoardingEntryModal from './BoardingEntryModal';
 import MedicalRecordModal from './MedicalRecordModal';
+import CustomerModal from './CustomerModal';
+import PetModal from './PetModal';
+import { createCustomer } from '../api/customers';
+import { useBranchContext } from '../context/BranchContext';
 
 interface Pet {
   id: string;
@@ -16,7 +20,9 @@ interface Pet {
   breed: string;
   gender: string;
   dateOfBirth: string;
+  weight?: string | number;
   owner?: {
+    id?: string;
     fullName: string;
     phone: string;
   };
@@ -30,17 +36,64 @@ interface CageDetailViewProps {
 
 const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateCage }) => {
   const queryClient = useQueryClient();
+  const { selectedBranchId } = useBranchContext();
   const [searchVal, setSearchVal] = useState('');
   const [isEditingExpectedDate, setIsEditingExpectedDate] = useState(false);
   const [expectedDate, setExpectedDate] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Quick register customer & pet state
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [isPetModalOpen, setIsPetModalOpen] = useState(false);
+  const [newlyCreatedCustomerId, setNewlyCreatedCustomerId] = useState<string | undefined>();
+
+  const handleCustomerSubmit = async (data: Partial<any>) => {
+    try {
+      const payload = { ...data };
+      if (selectedBranchId) payload.branchId = selectedBranchId;
+      const newCust = await createCustomer(payload);
+      alert(`Đăng ký khách hàng mới thành công: ${newCust.fullName}`);
+      setNewlyCreatedCustomerId(newCust.id);
+      setIsCustomerModalOpen(false);
+      setIsPetModalOpen(true);
+    } catch (err: any) {
+      alert(`Lỗi khi tạo khách hàng mới: ${err.response?.data?.message || err.message}`);
+    }
+  };
+
+  const handlePetSubmit = async (petData: any) => {
+    try {
+      const rawBranchId = selectedBranchId || localStorage.getItem('selectedBranchId');
+      const branchId = (!rawBranchId || rawBranchId === 'undefined' || rawBranchId === 'null') ? undefined : rawBranchId;
+      const response = await api.post('/pets', {
+        ...petData,
+        branchId
+      });
+      const newPet = response.data;
+      alert(`Đăng ký thú cưng mới thành công: ${newPet.name}`);
+      queryClient.invalidateQueries({ queryKey: ['petsForCageSearch'] });
+      queryClient.invalidateQueries({ queryKey: ['pets'] });
+      setIsPetModalOpen(false);
+      setNewlyCreatedCustomerId(undefined);
+      setSearchVal(newPet.name);
+      setIsDropdownOpen(true);
+    } catch (err: any) {
+      alert(`Lỗi khi tạo thú cưng mới: ${err.response?.data?.message || err.message}`);
+    }
+  };
+
   // Fetch pets list
   const { data: pets = [] } = useQuery<Pet[]>({
-    queryKey: ['petsForCageSearch'],
+    queryKey: ['petsForCageSearch', selectedBranchId],
     queryFn: async () => {
-      const response = await api.get('/pets?page=1&limit=200');
+      const rawBranchId = selectedBranchId || localStorage.getItem('selectedBranchId');
+      const branchId = (!rawBranchId || rawBranchId === 'undefined' || rawBranchId === 'null') ? undefined : rawBranchId;
+      let url = '/pets?page=1&limit=200';
+      if (branchId) {
+        url += `&branchId=${branchId}`;
+      }
+      const response = await api.get(url);
       return response.data?.data || [];
     }
   });
@@ -90,6 +143,16 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
   const handleSelectPet = (pet: Pet) => {
     setIsDropdownOpen(false);
     setSearchVal('');
+
+    if (hasPet) {
+      const currentOwnerId = cage.pet?.owner?.id;
+      const selectedOwnerId = pet.owner?.id;
+      if (currentOwnerId && selectedOwnerId && currentOwnerId !== selectedOwnerId) {
+        alert(`Không thể thêm! Chỉ được phép thêm các thú cưng của cùng chủ nuôi (${cage.pet?.owner?.fullName || 'chủ hiện tại'}) vào cùng một chuồng.`);
+        return;
+      }
+    }
+
     setSelectedPetForEntry(pet);
     setIsEntryModalOpen(true);
   };
@@ -97,6 +160,52 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
   const handleConfirmEntry = async (services: any[], expectedCheckout?: string, notesText?: string) => {
     if (!selectedPetForEntry) return;
     try {
+      if (hasPet) {
+        const confirmAdd = window.confirm(`Bạn có chắc chắn muốn thêm bé ${selectedPetForEntry.name} vào cùng chuồng với bé ${cage.pet?.name || 'thú cưng hiện tại'} không?`);
+        if (!confirmAdd) return;
+
+        const currentNotes = getNotesData(cage.notes);
+        const newAdditionalPets = [...(currentNotes.additionalPets || [])];
+        
+        if (newAdditionalPets.some(p => p.id === selectedPetForEntry.id) || cage.petId === selectedPetForEntry.id) {
+          alert(`Thú cưng ${selectedPetForEntry.name} đã ở trong chuồng này rồi!`);
+          return;
+        }
+
+        newAdditionalPets.push({
+          id: selectedPetForEntry.id,
+          name: selectedPetForEntry.name,
+          species: selectedPetForEntry.species,
+          breed: selectedPetForEntry.breed,
+          gender: selectedPetForEntry.gender,
+          dateOfBirth: selectedPetForEntry.dateOfBirth,
+          weight: selectedPetForEntry.weight
+        });
+
+        const firstDailyNote = notesText && notesText.trim() !== '' ? [
+          {
+            id: Date.now().toString(),
+            date: new Date().toISOString().slice(0, 10),
+            content: `Thêm bé ${selectedPetForEntry.name} vào chuồng: ${notesText}`
+          }
+        ] : [];
+        const mergedDailyNotes = [...firstDailyNote, ...(currentNotes.dailyNotes || [])];
+
+        const updatedNotes = JSON.stringify({
+          ...currentNotes,
+          additionalPets: newAdditionalPets,
+          dailyNotes: mergedDailyNotes
+        });
+
+        await onUpdateCage(cage.id, {
+          notes: updatedNotes
+        });
+
+        alert(`Đã thêm bé ${selectedPetForEntry.name} vào chuồng thành công!`);
+        setIsEntryModalOpen(false);
+        return;
+      }
+
       const firstDailyNote = notesText && notesText.trim() !== '' ? [
         {
           id: Date.now().toString(),
@@ -110,7 +219,8 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
         text: notesText || `Dự kiến trả: ${expectedCheckout || 'Chưa hẹn'}`,
         services: services,
         roomPrice: 100000,
-        dailyNotes: firstDailyNote
+        dailyNotes: firstDailyNote,
+        additionalPets: []
       });
       await onUpdateCage(cage.id, {
         status: CageStatus.OCCUPIED,
@@ -128,7 +238,7 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
   const [roomPrice, setRoomPrice] = useState('');
 
   const getNotesData = (rawNotes?: string) => {
-    if (!rawNotes) return { text: '', services: [] as any[], roomPrice: 100000, dailyNotes: [] as any[], deposits: [] as any[] };
+    if (!rawNotes) return { text: '', services: [] as any[], roomPrice: 100000, dailyNotes: [] as any[], deposits: [] as any[], additionalPets: [] as any[] };
     try {
       if (rawNotes.trim().startsWith('{')) {
         const parsed = JSON.parse(rawNotes);
@@ -137,13 +247,14 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
           services: parsed.services || [],
           roomPrice: Number(parsed.roomPrice) || 100000,
           dailyNotes: parsed.dailyNotes || [],
-          deposits: parsed.deposits || []
+          deposits: parsed.deposits || [],
+          additionalPets: parsed.additionalPets || []
         };
       }
     } catch (e) {
       // Fallback
     }
-    return { text: rawNotes, services: [] as any[], roomPrice: 100000, dailyNotes: [] as any[], deposits: [] as any[] };
+    return { text: rawNotes, services: [] as any[], roomPrice: 100000, dailyNotes: [] as any[], deposits: [] as any[], additionalPets: [] as any[] };
   };
 
   const currentNotesData = useMemo(() => getNotesData(cage.notes), [cage.notes]);
@@ -379,6 +490,8 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
         await topUpWallet(customerId, -walletPaidAmount);
       }
 
+      const allPetNames = [cage.pet?.name, ...currentNotesData.additionalPets.map((p: any) => p.name)].filter(Boolean).join(', ');
+
       // 3. Giải phóng chuồng
       await onUpdateCage(cage.id, {
         status: CageStatus.AVAILABLE,
@@ -386,7 +499,7 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
         notes: ''
       });
       setIsCheckoutModalOpen(false);
-      alert(`Xuất chuồng thành công cho bé ${cage.pet?.name}!`);
+      alert(`Xuất chuồng thành công cho các bé: ${allPetNames}!`);
       onBack();
     } catch (err) {
       console.error(err);
@@ -451,7 +564,7 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
     }
   }, [cage.pet?.createdAt]);
 
-  const hasPet = cage.status !== CageStatus.AVAILABLE && cage.status !== CageStatus.MAINTENANCE && cage.pet;
+  const hasPet = cage.status !== CageStatus.AVAILABLE && cage.status !== CageStatus.MAINTENANCE && (!!cage.pet || !!cage.petId);
 
 
 
@@ -747,11 +860,22 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
         }}>
           + Đặt phòng
         </button>
-        <button style={{
-          backgroundColor: '#0ea5e9', color: 'white', border: 'none', borderRadius: '0.375rem',
-          padding: '0.65rem 1rem', fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-        }}>
+        <button 
+          onClick={() => {
+            if (hasPet && cage.pet?.owner?.id) {
+              setNewlyCreatedCustomerId(cage.pet.owner.id);
+              setIsPetModalOpen(true);
+            } else {
+              setNewlyCreatedCustomerId(undefined);
+              setIsCustomerModalOpen(true);
+            }
+          }}
+          style={{
+            backgroundColor: '#0ea5e9', color: 'white', border: 'none', borderRadius: '0.375rem',
+            padding: '0.65rem 1rem', fontSize: '0.85rem', fontWeight: '700', cursor: 'pointer',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+          }}
+        >
           + Khách/Pet mới
         </button>
       </div>
@@ -887,6 +1011,46 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
                   <span style={{ fontWeight: '700', color: '#8b5cf6' }}>{formatVND(Number(customerDetails?.walletBalance) || 0)}</span>
                 </div>
               </div>
+
+              {/* Additional Pets Row */}
+              {currentNotesData.additionalPets && currentNotesData.additionalPets.length > 0 && (
+                <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', padding: '1rem', backgroundColor: '#ecfdf5', borderTop: '1px solid #d1fae5', borderBottom: '1px solid #d1fae5' }}>
+                  <span style={{ color: '#065f46', fontWeight: '700', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.75rem' }}>
+                    🐾 Thú cưng ở cùng chuồng ({currentNotesData.additionalPets.length}):
+                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {currentNotesData.additionalPets.map((p: any) => (
+                      <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'white', padding: '0.5rem 0.75rem', borderRadius: '6px', border: '1px solid #a7f3d0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <span style={{ fontSize: '1.1rem' }}>🐾</span>
+                          <span style={{ fontWeight: '700', color: '#0f172a' }}>{p.name}</span>
+                          <span style={{ color: '#475569', fontSize: '0.8rem' }}>
+                            - {p.species === 'dog' ? 'Chó' : p.species === 'cat' ? 'Mèo' : p.species} {p.breed ? `(${p.breed})` : ''} {p.weight ? `- ${p.weight}kg` : ''}
+                          </span>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (window.confirm(`Bạn có chắc chắn muốn bỏ bé ${p.name} ra khỏi chuồng này không?`)) {
+                              const updatedNotes = JSON.stringify({
+                                ...currentNotesData,
+                                additionalPets: currentNotesData.additionalPets.filter((item: any) => item.id !== p.id)
+                              });
+                              await onUpdateCage(cage.id, { notes: updatedNotes });
+                              alert(`Đã bỏ bé ${p.name} ra khỏi chuồng.`);
+                            }
+                          }}
+                          style={{
+                            border: 'none', backgroundColor: '#fee2e2', color: '#ef4444', cursor: 'pointer',
+                            padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: '600'
+                          }}
+                        >
+                          Xóa khỏi chuồng
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Full width Ghi chú row */}
               <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', padding: '1rem', backgroundColor: '#fafaf9', borderTop: '1px solid #f1f5f9' }}>
@@ -2290,6 +2454,22 @@ const CageDetailView: React.FC<CageDetailViewProps> = ({ cage, onBack, onUpdateC
         petName={selectedPetForEntry?.name}
         ownerName={selectedPetForEntry?.owner?.fullName}
         onConfirm={handleConfirmEntry}
+      />
+
+      <CustomerModal
+        isOpen={isCustomerModalOpen}
+        onClose={() => setIsCustomerModalOpen(false)}
+        onSubmit={handleCustomerSubmit}
+      />
+
+      <PetModal
+        isOpen={isPetModalOpen}
+        onClose={() => {
+          setIsPetModalOpen(false);
+          setNewlyCreatedCustomerId(undefined);
+        }}
+        onSubmit={handlePetSubmit}
+        ownerId={newlyCreatedCustomerId}
       />
     </div>
   );

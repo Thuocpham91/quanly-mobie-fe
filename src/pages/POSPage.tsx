@@ -1152,7 +1152,7 @@ const POSPage: React.FC = () => {
       return response.data;
     },
     onSuccess: (newPet) => {
-      queryClient.invalidateQueries({ queryKey: ['pets', selectedCustomer?.id] });
+      queryClient.invalidateQueries({ queryKey: ['pets'] });
       setSelectedPetId(newPet.id);
       alert(`Đã thêm mới thú cưng thành công: ${newPet.name}`);
       setQuickPetName('');
@@ -1216,6 +1216,15 @@ const POSPage: React.FC = () => {
 
   const removeFromCart = (id: string) => {
     setCart(prev => prev.filter(item => item.id !== id));
+  };
+
+  const updatePrice = (id: string, newPrice: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.id === id) {
+        return { ...item, basePrice: newPrice };
+      }
+      return item;
+    }));
   };
 
   const subTotal = useMemo(() => {
@@ -1440,7 +1449,7 @@ const POSPage: React.FC = () => {
             gap: '1rem',
             minHeight: '260px',
             overflow: isMobile ? 'visible' : 'hidden',
-            height: isMobile ? 'auto' : '100%'
+            height: isMobile ? 'auto' : '470px'
           }}>
             <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'stretch' : 'center', gap: isMobile ? '0.5rem' : '0' }}>
               <h1 style={{ fontSize: '1.3rem', fontWeight: '700', color: 'var(--foreground)' }}>Danh sách sản phẩm</h1>
@@ -1460,7 +1469,7 @@ const POSPage: React.FC = () => {
               </div>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem', alignContent: 'start', paddingBottom: '1rem' }}>
+            <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', alignContent: 'start', paddingBottom: '1rem' }}>
               {isLoading ? (
                 <p style={{ fontSize: '0.9rem', color: '#64748b' }}>Đang tải sản phẩm...</p>
               ) : filteredProducts.length === 0 ? (
@@ -1631,8 +1640,21 @@ const POSPage: React.FC = () => {
                             </span>
                           </div>
                         </td>
-                        <td style={{ padding: '0.5rem 0.4rem', textAlign: 'right', fontWeight: '500', whiteSpace: 'nowrap' }}>
-                          {formatCurrency(item.basePrice || 0)}
+                        <td style={{ padding: '0.25rem 0.4rem', textAlign: 'right' }}>
+                          <MoneyInput
+                            value={item.basePrice || 0}
+                            onChange={(val) => updatePrice(item.id, val)}
+                            style={{
+                              width: '90px',
+                              padding: '0.2rem 0.4rem',
+                              border: '1px solid var(--border)',
+                              borderRadius: '0.25rem',
+                              fontSize: '0.8rem',
+                              fontWeight: '600',
+                              color: '#1e293b',
+                              outline: 'none'
+                            }}
+                          />
                         </td>
                         <td style={{ padding: '0.5rem 0.4rem', textAlign: 'center' }}>
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', border: '1px solid var(--border)', borderRadius: '0.4rem', padding: '0.1rem' }}>
