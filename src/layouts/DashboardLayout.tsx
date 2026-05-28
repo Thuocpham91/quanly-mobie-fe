@@ -8,7 +8,7 @@ import branchesApi from '../api/branches';
 import { connectSocket, disconnectSocket } from '../api/socket';
 import { 
   LayoutDashboard, 
-  Dog, 
+  Cpu, 
   Users, 
   Calendar, 
   LogOut,
@@ -152,8 +152,9 @@ const DashboardLayout: React.FC = () => {
       label: 'Bán hàng',
       icon: <ShoppingCart size={18} />,
       items: [
-        { path: '/admin/pos',    icon: <ShoppingCart size={18} />, label: 'Bán hàng (POS)',      permission: 'sales.create' },
-        { path: '/admin/orders', icon: <ShoppingBag size={18} />,  label: 'Lịch sử đơn hàng',   permission: 'history.view' },
+        { path: '/admin/pos',            icon: <ShoppingCart size={18} />, label: 'Bán hàng (POS)',      permission: 'sales.create' },
+        { path: '/admin/orders',         icon: <ShoppingBag size={18} />,  label: 'Lịch sử đơn hàng',   permission: 'history.view' },
+        { path: '/admin/service-orders', icon: <ClipboardCheck size={18} />, label: 'Đơn hàng dịch vụ',  permission: 'sales.create' },
       ]
     },
     {
@@ -162,9 +163,7 @@ const DashboardLayout: React.FC = () => {
       items: [
         { path: '/admin',              icon: <LayoutDashboard size={18} />, label: t('common.dashboard'),     permission: 'dashboard.view' },
         { path: '/admin/customers',    icon: <Users size={18} />,           label: t('common.customers'),     permission: 'customers.view' },
-        { path: '/admin/pets',         icon: <Dog size={18} />,             label: t('common.pets'),          permission: 'pets.view' },
         { path: '/admin/appointments', icon: <Calendar size={18} />,        label: 'Công việc',           permission: 'appointments.view' },
-        { path: '/admin/boarding',     icon: <Box size={18} />,             label: t('common.boarding'),      permission: 'boarding.view' },
       ]
     },
     {
@@ -276,9 +275,9 @@ const DashboardLayout: React.FC = () => {
             color: 'white',
             flexShrink: 0
           }}>
-            <Dog size={24} />
+            <Cpu size={24} />
           </div>
-          {(!isCollapsed || isMobile) && <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--primary)', whiteSpace: 'nowrap' }}>PetCare</h2>}
+          {(!isCollapsed || isMobile) && <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--primary)', whiteSpace: 'nowrap' }}>TechCare</h2>}
         </div>
 
         <nav style={{ flex: 1, padding: '0 1rem', overflowY: 'auto' }}>

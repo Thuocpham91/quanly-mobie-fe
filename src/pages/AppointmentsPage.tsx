@@ -37,7 +37,6 @@ const AppointmentsPage: React.FC = () => {
   const filteredAppointments = appointments.filter((appt) => {
     const matchesSearch = 
       appt.purpose.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (appt.pet && appt.pet.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (appt.customer && appt.customer.fullName.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (appt.customer && appt.customer.phone.includes(searchTerm));
       
@@ -213,7 +212,7 @@ const AppointmentsPage: React.FC = () => {
           <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto' }}>
             {[
               { value: 'ALL', label: 'Tất cả' },
-              { value: 'PENDING', label: 'Chờ khám' },
+              { value: 'PENDING', label: 'Chờ xử lý' },
               { value: 'COMPLETED', label: 'Hoàn thành' },
               { value: 'CANCELLED', label: 'Đã hủy' }
             ].map((tab) => (
@@ -247,7 +246,7 @@ const AppointmentsPage: React.FC = () => {
             <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
               <tr>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Thời gian</th>
-                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Thú cưng & Chủ nuôi</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Khách hàng</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Dịch vụ hẹn / Lý do</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Trạng thái</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem', textAlign: 'right' }}>Thao tác</th>
@@ -260,12 +259,12 @@ const AppointmentsPage: React.FC = () => {
                 </tr>
               ) : filteredAppointments.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Không tìm thấy công việc nào.</td>
+                  <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Không tìm thấy đơn hàng nào.</td>
                 </tr>
               ) : filteredAppointments.map((appt) => {
                 const { date, time } = formatDateTime(appt.dateTime, appt.endDateTime);
                 const statusColors = {
-                  PENDING: { bg: 'rgba(245, 158, 11, 0.1)', text: '#d97706', label: 'Chờ khám' },
+                  PENDING: { bg: 'rgba(245, 158, 11, 0.1)', text: '#d97706', label: 'Chờ xử lý' },
                   COMPLETED: { bg: 'rgba(16, 185, 129, 0.1)', text: '#059669', label: 'Hoàn thành' },
                   CANCELLED: { bg: 'rgba(239, 68, 68, 0.1)', text: '#dc2626', label: 'Đã hủy' },
                   NO_SHOW: { bg: 'rgba(107, 114, 128, 0.1)', text: '#4b5563', label: 'Không đến' },
@@ -286,37 +285,25 @@ const AppointmentsPage: React.FC = () => {
                       </div>
                     </td>
                     
-                    {/* Pet & Customer */}
+                    {/* Customer */}
                     <td style={{ padding: '1rem 1.5rem' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                        <div style={{ fontWeight: '700', fontSize: '0.9rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <Dog size={16} color="#6366f1" />
-                          {!appt.petId ? (
-                            'Không có thú cưng'
-                          ) : (
-                            <>
-                              {appt.pet?.name || 'Thú cưng đã xóa'} 
-                              {appt.pet && (
-                                <span style={{ fontSize: '0.75rem', fontWeight: '500', color: '#94a3b8' }}>
-                                  ({appt.pet.species === 'Cat' ? 'Mèo' : 'Chó'})
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </div>
-                        <div style={{ fontSize: '0.8rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <User size={13} color="#94a3b8" />
+                        <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <User size={15} color="var(--primary)" />
                           {!appt.customerId ? (
                             'Khách vãng lai'
                           ) : (
                             <>
                               {appt.customer?.fullName || 'Khách hàng đã xóa'}
-                              <span style={{ color: '#cbd5e1' }}>|</span>
-                              <Phone size={11} color="#94a3b8" />
-                              {appt.customer?.phone || 'N/A'}
                             </>
                           )}
                         </div>
+                        {appt.customer && (
+                          <div style={{ fontSize: '0.8rem', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <Phone size={11} color="#94a3b8" />
+                            {appt.customer?.phone || 'N/A'}
+                          </div>
+                        )}
                       </div>
                     </td>
 
@@ -511,13 +498,13 @@ const AppointmentsPage: React.FC = () => {
                             padding: '0.25rem 0.5rem', borderRadius: '0.25rem', fontSize: '0.75rem', cursor: 'pointer',
                             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' 
                           }}
-                          title={`${new Date(appt.dateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}${appt.endDateTime ? ` - ${new Date(appt.endDateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}` : ''} - ${appt.purpose} (${appt.pet?.name || 'Không có thú cưng'})${appt.user ? ` - Phụ trách: ${appt.user.fullName}` : ''}`}
+                          title={`${new Date(appt.dateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}${appt.endDateTime ? ` - ${new Date(appt.endDateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}` : ''} - ${appt.purpose} (${appt.customer?.fullName || 'Khách vãng lai'})${appt.user ? ` - Phụ trách: ${appt.user.fullName}` : ''}`}
                         >
                           <span style={{ fontWeight: '700', color: statusColors.text }}>
                             {new Date(appt.dateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}
                             {appt.endDateTime && ` - ${new Date(appt.endDateTime).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}`}
                           </span>{' '}
-                          {appt.pet?.name || 'Không có thú cưng'}
+                          {appt.customer?.fullName || 'Khách vãng lai'}
                         </div>
                       )
                     })}

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, User } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { getPetsByOwner } from '../api/pets';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { getBranches } from '../api/branches';
@@ -36,7 +35,6 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
   const [custSearch, setCustSearch] = useState('');
   const [selectedCustId, setSelectedCustId] = useState<string>(customerId || '');
   const [selectedCustName, setSelectedCustName] = useState<string>('');
-  const [hasClearedPet, setHasClearedPet] = useState(false);
 
   const { data: customerData } = useQuery({
     queryKey: ['searchCustomersForAppt', custSearch],
@@ -45,13 +43,6 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
   });
 
   const matchedCustomers = customerData?.data || [];
-
-  // Query pets based on selected Customer ID
-  const { data: pets } = useQuery({
-    queryKey: ['petsOfOwner', selectedCustId],
-    queryFn: () => getPetsByOwner(selectedCustId),
-    enabled: isOpen && !!selectedCustId,
-  });
 
   // Query branches
   const { data: branchData } = useQuery({
@@ -66,7 +57,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
     branchId: selectedBranchId || '',
     dateTime: '',
     endDateTime: '',
-    purpose: 'Khám tổng quát',
+    purpose: 'Sửa chữa / Bảo dưỡng tổng quát',
     notes: initialNotes || '',
     userId: '',
   });
@@ -86,7 +77,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
         branchId: appointment.branchId || selectedBranchId || '',
         dateTime: appointment.dateTime ? appointment.dateTime.substring(0, 16) : '',
         endDateTime: appointment.endDateTime ? appointment.endDateTime.substring(0, 16) : '',
-        purpose: appointment.purpose || 'Khám tổng quát',
+        purpose: appointment.purpose || 'Sửa chữa / Bảo dưỡng tổng quát',
         notes: appointment.notes || '',
         userId: appointment.userId || '',
       });
@@ -102,7 +93,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
         branchId: selectedBranchId || '',
         dateTime: defaultDateTime || '',
         endDateTime: '',
-        purpose: 'Khám tổng quát',
+        purpose: 'Sửa chữa / Bảo dưỡng tổng quát',
         notes: initialNotes || '',
         userId: '',
       });
@@ -112,32 +103,10 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
     }
   }, [appointment, isOpen, customerId, selectedBranchId, initialNotes, defaultDateTime]);
 
-  // Reset hasClearedPet and petId when customer changes
-  useEffect(() => {
-    if (!appointment) {
-      setHasClearedPet(false);
-      setFormData(prev => ({ ...prev, petId: '' }));
-    }
-  }, [selectedCustId, appointment]);
-
-  // Set first pet when pets list is loaded
-  useEffect(() => {
-    if (pets && pets.length > 0 && !formData.petId && !hasClearedPet && !appointment) {
-      setFormData(prev => ({ ...prev, petId: pets[0].id }));
-    }
-  }, [pets, formData.petId, hasClearedPet, appointment]);
-
   if (!isOpen) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    if (name === 'petId') {
-      if (value === '') {
-        setHasClearedPet(true);
-      } else {
-        setHasClearedPet(false);
-      }
-    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -257,7 +226,8 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
             </div>
           )}
 
-          {/* Pet Selection */}
+          {/* Pet Selection (Hidden for computer/phone shop) */}
+          {/*
           <div>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
               Chọn thú cưng (không bắt buộc)
@@ -285,6 +255,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
               )}
             </select>
           </div>
+          */}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
             <div>
@@ -366,7 +337,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
 
           <div>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-              <span style={{color: '#ef4444'}}>*</span> Lý do cuộc hẹn / Dịch vụ
+              <span style={{color: '#ef4444'}}>*</span> Lý do / Yêu cầu sửa chữa
             </label>
             <select
               name="purpose"
@@ -378,12 +349,12 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
                 backgroundColor: 'white'
               }}
             >
-              <option value="Khám tổng quát">Khám bệnh tổng quát</option>
-              <option value="Tiêm phòng">Tiêm chủng / Vaccine</option>
-              <option value="Điều trị bệnh">Điều trị bệnh ngoại trú</option>
-              <option value="Phẫu thuật">Phẫu thuật / Triệt sản</option>
-              <option value="Spa & Grooming">Tắm rửa / Cắt tỉa lông (Spa)</option>
-              <option value="Lưu trú (Boarding)">Gửi thú cưng (Boarding)</option>
+              <option value="Sửa chữa / Bảo dưỡng tổng quát">Sửa chữa / Bảo dưỡng tổng quát</option>
+              <option value="Cài đặt phần mềm / HĐH">Cài đặt phần mềm / Hệ điều hành</option>
+              <option value="Thay thế linh kiện">Thay thế linh kiện</option>
+              <option value="Vệ sinh thiết bị">Vệ sinh thiết bị</option>
+              <option value="Ép kính / Thay màn hình">Ép kính / Thay màn hình</option>
+              <option value="Kiểm tra lỗi phần cứng">Kiểm tra lỗi phần cứng</option>
               <option value="Khác">Khác</option>
             </select>
           </div>
@@ -406,7 +377,7 @@ const AppointmentModal: React.FC<AppointmentModalProps> = ({
                     ['clean']
                   ],
                 }}
-                placeholder="Yêu cầu đặc biệt, triệu chứng bệnh lý sơ bộ..."
+                placeholder="Yêu cầu đặc biệt, tình trạng thiết bị sơ bộ..."
                 style={{ height: '150px', marginBottom: '40px' }}
               />
             </div>

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   TrendingUp, ShoppingCart, DollarSign, Activity, Users,
   AlertTriangle, Calendar, Dog, ArrowUpRight, ArrowDownRight,
@@ -227,7 +227,7 @@ const DashboardHome: React.FC = () => {
             <h1 style={{ fontSize: "1.75rem", fontWeight: "800", color: "var(--foreground)", marginBottom: "0.2rem" }}>
               Bảng điều khiển
             </h1>
-            <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>Tổng quan hoạt động kinh doanh phòng khám thú y</p>
+            <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>Tổng quan hoạt động kinh doanh cửa hàng</p>
           </div>
 
           <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
@@ -305,11 +305,10 @@ const DashboardHome: React.FC = () => {
         </div>
       </div>
 
-      {/* ── Pie / Bar Charts ── */}
+      {/* ── Pie Chart ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
         {[
           { key: "appointments", title: `Lịch hẹn (${data?.appointments?.total ?? 0})`,   icon: <Calendar size={16} />, color: "#6366f1", chartData: data?.appointments?.data },
-          { key: "pets",         title: `Thú cưng (${data?.pets?.total ?? 0})`,           icon: <Dog size={16} />,      color: "#10b981", chartData: data?.pets?.data },
         ].map(({ key, title, icon, color, chartData }, delay) => (
           <div key={key} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "1rem", padding: "1.5rem", boxShadow: "0 4px 24px rgba(0,0,0,0.06)", animation: `fadeUp 0.5s ease ${0.2 + delay * 0.07}s both` }}>
             <SectionHeader icon={icon} title={title} iconColor={color} />
@@ -329,27 +328,6 @@ const DashboardHome: React.FC = () => {
             </div>
           </div>
         ))}
-
-        {/* Cages Bar */}
-        <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "1rem", padding: "1.5rem", boxShadow: "0 4px 24px rgba(0,0,0,0.06)", animation: "fadeUp 0.5s ease 0.35s both" }}>
-          <SectionHeader icon={<Activity size={16} />} title={`Lồng nội trú (${data?.cages?.total ?? 0})`} iconColor="#f59e0b" />
-          <div style={{ height: "200px" }}>
-            {loading ? <Skeleton height="100%" style={{ borderRadius: "0.75rem" }} /> :
-             data?.cages?.data.length ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.cages.data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }} barSize={28}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={28} />
-                  <Tooltip cursor={{ fill: "rgba(99,102,241,0.05)" }} contentStyle={{ borderRadius: "0.75rem", border: "1px solid #e2e8f0", fontSize: "0.8rem" }} />
-                  <Bar dataKey="value" name="Số lồng" radius={[6, 6, 0, 0]}>
-                    {data.cages.data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            ) : <EmptyState />}
-          </div>
-        </div>
       </div>
 
       {/* ── Tables ── */}

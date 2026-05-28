@@ -9,8 +9,6 @@ import api from '../api/client';
 import customersApi from '../api/customers';
 import type { Customer } from '../api/customers';
 import { useBranchContext } from '../context/BranchContext';
-import { getRooms, updateCage, CageStatus } from '../api/boarding';
-import MedicalRecordModal from '../components/MedicalRecordModal';
 
 interface CartItem extends Product {
   cartQuantity: number;
@@ -933,77 +931,7 @@ const POSPage: React.FC = () => {
   const { selectedBranchId } = useBranchContext();
   const branchId = (!selectedBranchId || selectedBranchId === 'undefined' || selectedBranchId === 'null') ? undefined : selectedBranchId;
 
-  // Fetch Rooms with cages for admitting
-  const { data: admitRooms = [] } = useQuery({
-    queryKey: ['rooms', branchId],
-    queryFn: () => getRooms(branchId),
-    enabled: !!branchId && isAdmitPetModalOpen,
-  });
 
-  // Filter available cages for the selected room
-  const availableCages = useMemo(() => {
-    if (!selectedAdmitRoomId) return [];
-    const room = admitRooms.find(r => r.id === selectedAdmitRoomId);
-    if (!room) return [];
-    return (room.cages || []).filter(c => c.status === CageStatus.AVAILABLE);
-  }, [selectedAdmitRoomId, admitRooms]);
-
-  // Set default room and cage when modal opens or rooms load
-  React.useEffect(() => {
-    if (isAdmitPetModalOpen && admitRooms.length > 0) {
-      if (!selectedAdmitRoomId || !admitRooms.some(r => r.id === selectedAdmitRoomId)) {
-        const firstRoom = admitRooms[0];
-        setSelectedAdmitRoomId(firstRoom.id);
-        
-        const firstAvailableCage = (firstRoom.cages || []).find(c => c.status === CageStatus.AVAILABLE);
-        if (firstAvailableCage) {
-          setSelectedAdmitCageId(firstAvailableCage.id);
-        } else {
-          setSelectedAdmitCageId('');
-        }
-      }
-    }
-  }, [isAdmitPetModalOpen, admitRooms, selectedAdmitRoomId]);
-
-  // Handle changing room selection
-  const handleAdmitRoomChange = (roomId: string) => {
-    setSelectedAdmitRoomId(roomId);
-    const room = admitRooms.find(r => r.id === roomId);
-    if (room) {
-      const firstAvailableCage = (room.cages || []).find(c => c.status === CageStatus.AVAILABLE);
-      if (firstAvailableCage) {
-        setSelectedAdmitCageId(firstAvailableCage.id);
-      } else {
-        setSelectedAdmitCageId('');
-      }
-    } else {
-      setSelectedAdmitCageId('');
-    }
-  };
-
-  const admitPetMutation = useMutation({
-    mutationFn: async ({ cageId, petId }: { cageId: string; petId: string }) => {
-      return await updateCage(cageId, { petId, status: CageStatus.OCCUPIED });
-    },
-    onSuccess: () => {
-      alert('Nhập chuồng lưu trú cho thú cưng thành công!');
-      setIsAdmitPetModalOpen(false);
-      setSelectedAdmitCageId('');
-      queryClient.invalidateQueries({ queryKey: ['rooms'] });
-    },
-    onError: (err: any) => {
-      alert(`Lỗi nhập chuồng: ${err.response?.data?.message || err.message || 'Không rõ nguyên nhân'}`);
-    }
-  });
-
-  const handleAdmitSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedAdmitCageId) {
-      alert('Vui lòng chọn chuồng trống để nhập chuồng!');
-      return;
-    }
-    admitPetMutation.mutate({ cageId: selectedAdmitCageId, petId: selectedPetId });
-  };
 
   const { data: inventorySummary = [] } = useQuery({
     queryKey: ['inventorySummary', branchId],
@@ -1919,6 +1847,8 @@ const POSPage: React.FC = () => {
               </div>
 
               {/* Pet Selection */}
+              {/* Pet Selection (Hidden for computer/phone shop) */}
+              {/*
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', width: '100%' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <span style={{ fontSize: '0.75rem', color: '#64748b', whiteSpace: 'nowrap' }}>Thú cưng:</span>
@@ -1981,7 +1911,7 @@ const POSPage: React.FC = () => {
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '0.2rem',
+                        gap: '0.2,r',
                         transition: 'all 0.2s',
                         boxShadow: '0 2px 4px rgba(16, 185, 129, 0.2)'
                       }}
@@ -2016,6 +1946,7 @@ const POSPage: React.FC = () => {
                   </div>
                 )}
               </div>
+              */}
             </div>
           )}
         </div>
@@ -2432,8 +2363,6 @@ const POSPage: React.FC = () => {
             <button 
               onClick={() => {
                 setShowQuickCustomerModal(false);
-                setQuickCustomerPets([]);
-                setActiveCustomerModalTab('customer');
               }}
               style={{
                 position: 'absolute', top: '1.25rem', right: '1.25rem',
@@ -2446,363 +2375,136 @@ const POSPage: React.FC = () => {
               <X size={20} />
             </button>
 
-            {/* Custom Tab Header precisely matching the user's requested layout */}
+            {/* Custom Header */}
             <div style={{
-              display: 'flex', justifyContent: 'center', gap: '0.25rem',
               padding: '1.25rem 1.5rem 0.75rem', backgroundColor: '#f8fafc',
-              borderBottom: '1px solid #e2e8f0'
+              borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center'
             }}>
-              <div style={{
-                display: 'inline-flex', padding: '0.25rem', backgroundColor: '#e2e8f0',
-                borderRadius: '0.5rem', gap: '0.25rem'
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setActiveCustomerModalTab('customer')}
-                  style={{
-                    padding: '0.4rem 1rem', borderRadius: '0.375rem', fontSize: '0.85rem',
-                    fontWeight: '600', border: 'none', cursor: 'pointer',
-                    backgroundColor: activeCustomerModalTab === 'customer' ? 'white' : 'transparent',
-                    color: activeCustomerModalTab === 'customer' ? '#1e293b' : '#64748b',
-                    boxShadow: activeCustomerModalTab === 'customer' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  Khách hàng
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!quickCustomerName.trim() || !quickCustomerPhone.trim()) {
-                      alert('Vui lòng điền thông tin Họ tên và Số điện thoại khách hàng trước!');
-                      return;
-                    }
-                    setActiveCustomerModalTab('pets');
-                  }}
-                  style={{
-                    padding: '0.4rem 1rem', borderRadius: '0.375rem', fontSize: '0.85rem',
-                    fontWeight: '600', border: 'none', cursor: 'pointer',
-                    backgroundColor: activeCustomerModalTab === 'pets' ? 'white' : 'transparent',
-                    color: activeCustomerModalTab === 'pets' ? '#1e293b' : '#64748b',
-                    boxShadow: activeCustomerModalTab === 'pets' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  Thú cưng {quickCustomerPets.length > 0 && `(${quickCustomerPets.length})`}
-                </button>
-              </div>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#1e293b', margin: 0 }}>Thêm nhanh khách hàng</h3>
             </div>
 
             {/* Modal Content */}
             <div style={{ padding: '1.5rem', maxHeight: '75vh', overflowY: 'auto' }}>
-              
-              {activeCustomerModalTab === 'customer' ? (
-                /* Tab 1: Customer Form */
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <div style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', padding: '0.4rem', borderRadius: '0.5rem', color: '#8b5cf6' }}>
-                      <User size={18} />
-                    </div>
-                    <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1e293b' }}>Thông tin khách hàng</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <div style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', padding: '0.4rem', borderRadius: '0.5rem', color: '#8b5cf6' }}>
+                    <User size={18} />
                   </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                    <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#475569' }}>Họ và tên khách hàng *</label>
-                    <input
-                      type="text"
-                      placeholder="Ví dụ: Nguyễn Văn A"
-                      value={quickCustomerName}
-                      onChange={(e) => setQuickCustomerName(e.target.value)}
-                      style={{
-                        padding: '0.6rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
-                        fontSize: '0.85rem', outline: 'none', transition: 'border-color 0.2s'
-                      }}
-                      onFocus={e => e.target.style.borderColor = '#8b5cf6'}
-                      onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                    <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#475569' }}>Số điện thoại *</label>
-                    <input
-                      type="text"
-                      placeholder="Ví dụ: 0987654321"
-                      value={quickCustomerPhone}
-                      onChange={(e) => setQuickCustomerPhone(e.target.value)}
-                      style={{
-                        padding: '0.6rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
-                        fontSize: '0.85rem', outline: 'none', transition: 'border-color 0.2s'
-                      }}
-                      onFocus={e => e.target.style.borderColor = '#8b5cf6'}
-                      onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                    <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#475569' }}>Địa chỉ (Tùy chọn)</label>
-                    <input
-                      type="text"
-                      placeholder="Địa chỉ liên hệ"
-                      value={quickCustomerAddress}
-                      onChange={(e) => setQuickCustomerAddress(e.target.value)}
-                      style={{
-                        padding: '0.6rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
-                        fontSize: '0.85rem', outline: 'none'
-                      }}
-                      onFocus={e => e.target.style.borderColor = '#8b5cf6'}
-                      onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                    <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#475569' }}>Email (Tùy chọn)</label>
-                    <input
-                      type="email"
-                      placeholder="email@example.com"
-                      value={quickCustomerEmail}
-                      onChange={(e) => setQuickCustomerEmail(e.target.value)}
-                      style={{
-                        padding: '0.6rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
-                        fontSize: '0.85rem', outline: 'none'
-                      }}
-                      onFocus={e => e.target.style.borderColor = '#8b5cf6'}
-                      onBlur={e => e.target.style.borderColor = '#cbd5e1'}
-                    />
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!quickCustomerName.trim() || !quickCustomerPhone.trim()) {
-                          alert('Vui lòng điền Họ tên và Số điện thoại khách hàng!');
-                          return;
-                        }
-                        setActiveCustomerModalTab('pets');
-                      }}
-                      style={{
-                        padding: '0.6rem 1.25rem', borderRadius: '0.5rem', border: 'none',
-                        backgroundColor: '#8b5cf6', color: 'white', fontSize: '0.85rem',
-                        fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.25rem'
-                      }}
-                    >
-                      Tiếp theo: Thêm thú cưng <Plus size={14} />
-                    </button>
-                  </div>
+                  <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1e293b' }}>Thông tin khách hàng</span>
                 </div>
-              ) : (
-                /* Tab 2: Pets Sub-Form */
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  
-                  {/* List of currently added pets */}
-                  {quickCustomerPets.length > 0 && (
-                    <div style={{
-                      backgroundColor: '#f1f5f9', borderRadius: '0.5rem', padding: '0.75rem',
-                      display: 'flex', flexDirection: 'column', gap: '0.4rem', border: '1px dashed #cbd5e1'
-                    }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#475569' }}>
-                        Danh sách thú cưng sẽ được tạo ({quickCustomerPets.length}):
-                      </span>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-                        {quickCustomerPets.map((p, idx) => (
-                          <div key={idx} style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
-                            backgroundColor: 'white', border: '1px solid #cbd5e1',
-                            borderRadius: '2rem', padding: '0.2rem 0.6rem', fontSize: '0.75rem',
-                            fontWeight: '600', color: '#1e293b'
-                          }}>
-                            <span>🐶 {p.name} ({p.species})</span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setQuickCustomerPets(prev => prev.filter((_, i) => i !== idx));
-                              }}
-                              style={{
-                                border: 'none', backgroundColor: 'transparent', color: '#ef4444',
-                                cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center'
-                              }}
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
-                  {/* Add New Pet Sub-Form */}
-                  <div style={{
-                    border: '1px solid #e2e8f0', borderRadius: '0.75rem', padding: '1rem',
-                    backgroundColor: '#fafafa', display: 'flex', flexDirection: 'column', gap: '0.75rem'
-                  }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#475569', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.25rem' }}>
-                      Nhập thông tin thú cưng
-                    </span>
-
-                    {renderPetFormFields({
-                      name: tempPetName, setName: setTempPetName,
-                      species: tempPetSpecies, setSpecies: setTempPetSpecies,
-                      breed: tempPetBreed, setBreed: setTempPetBreed,
-                      weight: tempPetWeight, setWeight: setTempPetWeight,
-                      gender: tempPetGender, setGender: setTempPetGender,
-                      notes: tempPetNotes, setNotes: setTempPetNotes,
-                      barcode: tempPetBarcode, setBarcode: setTempPetBarcode,
-                      ageType: tempPetAgeType, setAgeType: setTempPetAgeType,
-                      ageYears: tempPetAgeYears, setAgeYears: setTempPetAgeYears,
-                      ageMonths: tempPetAgeMonths, setAgeMonths: setTempPetAgeMonths,
-                      ageDays: tempPetAgeDays, setAgeDays: setTempPetAgeDays,
-                      furColor: tempPetFurColor, setFurColor: setTempPetFurColor,
-                      neutered: tempPetNeutered, setNeutered: setTempPetNeutered,
-                      isCrossBreed: tempPetIsCrossBreed, setIsCrossBreed: setTempPetIsCrossBreed,
-                      habitat: tempPetHabitat, setHabitat: setTempPetHabitat,
-                      avatarUrl: tempPetAvatarUrl, setAvatarUrl: setTempPetAvatarUrl,
-                    }, true)}
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!tempPetName.trim()) {
-                          alert('Vui lòng nhập tên thú cưng!');
-                          return;
-                        }
-                        const newPetObj = {
-                          name: tempPetName.trim(),
-                          species: tempPetSpecies,
-                          breed: tempPetBreed.trim() || undefined,
-                          weight: tempPetWeight ? Number(tempPetWeight) : undefined,
-                          gender: tempPetGender,
-                          notes: tempPetNotes.trim() || undefined,
-                          barcode: tempPetBarcode.trim() || undefined,
-                          ageType: tempPetAgeType,
-                          ageYears: tempPetAgeYears ? Number(tempPetAgeYears) : undefined,
-                          ageMonths: tempPetAgeMonths ? Number(tempPetAgeMonths) : undefined,
-                          ageDays: tempPetAgeDays ? Number(tempPetAgeDays) : undefined,
-                          furColor: tempPetFurColor.trim() || undefined,
-                          neutered: tempPetNeutered || undefined,
-                          isCrossBreed: tempPetIsCrossBreed,
-                          habitat: tempPetHabitat.trim() || undefined,
-                          avatarUrl: tempPetAvatarUrl.trim() || undefined
-                        };
-                        setQuickCustomerPets(prev => [...prev, newPetObj]);
-                        
-                        // Clear all subform states
-                        setTempPetName('');
-                        setTempPetBreed('');
-                        setTempPetWeight('');
-                        setTempPetGender('male');
-                        setTempPetNotes('');
-                        setTempPetBarcode('');
-                        setTempPetAgeType('years');
-                        setTempPetAgeYears('');
-                        setTempPetAgeMonths('');
-                        setTempPetAgeDays('');
-                        setTempPetFurColor('');
-                        setTempPetNeutered('');
-                        setTempPetIsCrossBreed(false);
-                        setTempPetHabitat('');
-                        setTempPetAvatarUrl('');
-                      }}
-                      style={{
-                        padding: '0.45rem', borderRadius: '0.375rem', border: '1px solid #8b5cf6',
-                        backgroundColor: 'white', color: '#8b5cf6', fontSize: '0.75rem',
-                        fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.2rem'
-                      }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.backgroundColor = '#8b5cf6';
-                        e.currentTarget.style.color = 'white';
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.backgroundColor = 'white';
-                        e.currentTarget.style.color = '#8b5cf6';
-                      }}
-                    >
-                      <Plus size={13} /> Thêm thú cưng này vào danh sách
-                    </button>
-                  </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#475569' }}>Họ và tên khách hàng *</label>
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: Nguyễn Văn A"
+                    value={quickCustomerName}
+                    onChange={(e) => setQuickCustomerName(e.target.value)}
+                    style={{
+                      padding: '0.6rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
+                      fontSize: '0.85rem', outline: 'none', transition: 'border-color 0.2s'
+                    }}
+                    onFocus={e => e.target.style.borderColor = '#8b5cf6'}
+                    onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+                  />
                 </div>
-              )}
 
-              {/* General Actions Row at the very bottom */}
-              <div style={{
-                display: 'flex', gap: '0.75rem', marginTop: '1.5rem',
-                borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem'
-              }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowQuickCustomerModal(false);
-                    setQuickCustomerPets([]);
-                    setActiveCustomerModalTab('customer');
-                  }}
-                  style={{
-                    flex: 1, padding: '0.65rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
-                    backgroundColor: 'white', color: '#475569', fontSize: '0.88rem', fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Hủy
-                </button>
-                <button
-                  type="button"
-                  disabled={createCustomerMutation.isPending}
-                  onClick={async () => {
-                    if (!quickCustomerName.trim()) {
-                      alert('Vui lòng nhập họ tên khách hàng');
-                      setActiveCustomerModalTab('customer');
-                      return;
-                    }
-                    if (!quickCustomerPhone.trim()) {
-                      alert('Vui lòng nhập số điện thoại');
-                      setActiveCustomerModalTab('customer');
-                      return;
-                    }
-                    
-                    // If user was typing a pet but forgot to click "+ Thêm vào danh sách", offer to add it or remind them
-                    if (tempPetName.trim()) {
-                      const confirmAdd = window.confirm(`Bạn đang nhập dở thông tin thú cưng "${tempPetName}". Bạn có muốn thêm thú cưng này vào luôn không?`);
-                      if (confirmAdd) {
-                        quickCustomerPets.push({
-                          name: tempPetName.trim(),
-                          species: tempPetSpecies,
-                          breed: tempPetBreed.trim() || undefined,
-                          weight: tempPetWeight ? Number(tempPetWeight) : undefined,
-                          gender: tempPetGender,
-                          notes: tempPetNotes.trim() || undefined
-                        });
-                        
-                        // Clear subform inputs
-                        setTempPetName('');
-                        setTempPetBreed('');
-                        setTempPetWeight('');
-                        setTempPetGender('male');
-                        setTempPetNotes('');
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#475569' }}>Số điện thoại *</label>
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: 0987654321"
+                    value={quickCustomerPhone}
+                    onChange={(e) => setQuickCustomerPhone(e.target.value)}
+                    style={{
+                      padding: '0.6rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
+                      fontSize: '0.85rem', outline: 'none', transition: 'border-color 0.2s'
+                    }}
+                    onFocus={e => e.target.style.borderColor = '#8b5cf6'}
+                    onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#475569' }}>Địa chỉ (Tùy chọn)</label>
+                  <input
+                    type="text"
+                    placeholder="Địa chỉ liên hệ"
+                    value={quickCustomerAddress}
+                    onChange={(e) => setQuickCustomerAddress(e.target.value)}
+                    style={{
+                      padding: '0.6rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
+                      fontSize: '0.85rem', outline: 'none'
+                    }}
+                    onFocus={e => e.target.style.borderColor = '#8b5cf6'}
+                    onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '600', color: '#475569' }}>Email (Tùy chọn)</label>
+                  <input
+                    type="email"
+                    placeholder="email@example.com"
+                    value={quickCustomerEmail}
+                    onChange={(e) => setQuickCustomerEmail(e.target.value)}
+                    style={{
+                      padding: '0.6rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
+                      fontSize: '0.85rem', outline: 'none'
+                    }}
+                    onFocus={e => e.target.style.borderColor = '#8b5cf6'}
+                    onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+                  />
+                </div>
+
+                <div style={{
+                  display: 'flex', gap: '0.75rem', marginTop: '1.5rem',
+                  borderTop: '1px solid #e2e8f0', paddingTop: '1.25rem'
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowQuickCustomerModal(false);
+                    }}
+                    style={{
+                      flex: 1, padding: '0.65rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1',
+                      backgroundColor: 'white', color: '#475569', fontSize: '0.88rem', fontWeight: '600',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="button"
+                    disabled={createCustomerMutation.isPending}
+                    onClick={async () => {
+                      if (!quickCustomerName.trim()) {
+                        alert('Vui lòng nhập họ tên khách hàng');
+                        return;
                       }
-                    }
-
-                    await createCustomerMutation.mutateAsync({
-                      fullName: quickCustomerName.trim(),
-                      phone: quickCustomerPhone.trim(),
-                      address: quickCustomerAddress.trim() || undefined,
-                      email: quickCustomerEmail.trim() || undefined
-                    });
-                  }}
-                  style={{
-                    flex: 2, padding: '0.65rem', borderRadius: '0.5rem', border: 'none',
-                    backgroundColor: '#8b5cf6', color: 'white', fontSize: '0.88rem', fontWeight: '600',
-                    cursor: createCustomerMutation.isPending ? 'not-allowed' : 'pointer',
-                    opacity: createCustomerMutation.isPending ? 0.7 : 1, transition: 'all 0.2s',
-                    boxShadow: '0 4px 6px -1px rgba(139, 92, 246, 0.2)'
-                  }}
-                >
-                  {createCustomerMutation.isPending 
-                    ? 'Đang tạo...' 
-                    : quickCustomerPets.length > 0 
-                      ? `Tạo khách hàng & ${quickCustomerPets.length} thú cưng` 
-                      : 'Tạo khách hàng'}
-                </button>
+                      if (!quickCustomerPhone.trim()) {
+                        alert('Vui lòng nhập số điện thoại');
+                        return;
+                      }
+                      await createCustomerMutation.mutateAsync({
+                        fullName: quickCustomerName.trim(),
+                        phone: quickCustomerPhone.trim(),
+                        address: quickCustomerAddress.trim() || undefined,
+                        email: quickCustomerEmail.trim() || undefined
+                      });
+                    }}
+                    style={{
+                      flex: 2, padding: '0.65rem', borderRadius: '0.5rem', border: 'none',
+                      backgroundColor: '#8b5cf6', color: 'white', fontSize: '0.88rem', fontWeight: '600',
+                      cursor: createCustomerMutation.isPending ? 'not-allowed' : 'pointer',
+                      opacity: createCustomerMutation.isPending ? 0.7 : 1, transition: 'all 0.2s',
+                      boxShadow: '0 4px 6px -1px rgba(139, 92, 246, 0.2)'
+                    }}
+                  >
+                    {createCustomerMutation.isPending ? 'Đang tạo...' : 'Tạo khách hàng'}
+                  </button>
+                </div>
               </div>
-
             </div>
           </div>
         </div>
@@ -3054,179 +2756,7 @@ const POSPage: React.FC = () => {
           </div>
         </div>
       )}
-      {/* Admit Pet Modal */}
-      {isAdmitPetModalOpen && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: '1rem'
-        }}>
-          <div style={{
-            backgroundColor: 'white', borderRadius: '0.5rem', width: '100%', maxWidth: '450px',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column'
-          }}>
-            {/* Header Tabs */}
-            <div style={{ display: 'flex', borderBottom: '1px solid #f3f4f6', position: 'relative', paddingRight: '2.5rem' }}>
-              <button
-                type="button"
-                onClick={() => setAdmitActiveTab('info')}
-                style={{
-                  flex: 1, padding: '1rem', border: 'none', backgroundColor: admitActiveTab === 'info' ? 'white' : '#f3f4f6',
-                  color: admitActiveTab === 'info' ? '#10b981' : '#9ca3af', fontWeight: '600', cursor: 'pointer',
-                  outline: 'none', borderTop: admitActiveTab === 'info' ? '3px solid #10b981' : '3px solid transparent'
-                }}
-              >
-                Chọn thông tin
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdmitActiveTab('time')}
-                style={{
-                  flex: 1, padding: '1rem', border: 'none', backgroundColor: admitActiveTab === 'time' ? 'white' : '#f3f4f6',
-                  color: admitActiveTab === 'time' ? '#10b981' : '#9ca3af', fontWeight: '600', cursor: 'pointer',
-                  outline: 'none', borderTop: admitActiveTab === 'time' ? '3px solid #10b981' : '3px solid transparent'
-                }}
-              >
-                Thời gian lưu chuồng
-              </button>
-              <button type="button" onClick={() => setIsAdmitPetModalOpen(false)} style={{
-                position: 'absolute', right: '0.5rem', top: '0.5rem', padding: '0.5rem',
-                border: 'none', backgroundColor: 'transparent', color: '#9ca3af', cursor: 'pointer'
-              }}>
-                <X size={18} />
-              </button>
-            </div>
 
-            <form onSubmit={handleAdmitSubmit}>
-              <div style={{ padding: '1.5rem', minHeight: '260px' }}>
-                {admitActiveTab === 'info' ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', color: '#1e293b' }}>
-                    <div>
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: '0.25rem' }}>Thú cưng:</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '700', color: 'var(--foreground)' }}>
-                        {customerPets.find((p: any) => p.id === selectedPetId)?.name || 'Thú cưng'}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.4rem', color: '#475569' }}>
-                        Chọn phòng / Khu vực:
-                      </label>
-                      <select
-                        value={selectedAdmitRoomId}
-                        onChange={(e) => handleAdmitRoomChange(e.target.value)}
-                        style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', outline: 'none', backgroundColor: 'white', fontSize: '0.85rem' }}
-                      >
-                        {admitRooms.map(room => (
-                          <option key={room.id} value={room.id}>
-                            {room.name} ({room.cages?.filter((c: any) => c.status === CageStatus.AVAILABLE).length || 0} chuồng trống)
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', marginBottom: '0.4rem', color: '#475569' }}>
-                        Chọn chuồng trống:
-                      </label>
-                      <select
-                        value={selectedAdmitCageId}
-                        onChange={(e) => setSelectedAdmitCageId(e.target.value)}
-                        style={{ width: '100%', padding: '0.55rem 0.75rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', outline: 'none', backgroundColor: 'white', fontSize: '0.85rem' }}
-                      >
-                        {availableCages.length === 0 ? (
-                          <option value="">-- Không có chuồng trống --</option>
-                        ) : (
-                          availableCages.map(cage => (
-                            <option key={cage.id} value={cage.id}>{cage.name} - Trống</option>
-                          ))
-                        )}
-                      </select>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                    {/* Service Selection */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '600', color: '#10b981', marginBottom: '0.5rem' }}>
-                        Dịch vụ:
-                      </label>
-                      <div style={{ position: 'relative' }}>
-                        <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-                        <input
-                          type="text"
-                          placeholder="Tìm gói tiền áp dụng"
-                          style={{
-                            width: '100%', padding: '0.65rem 1rem 0.65rem 2.2rem', fontSize: '0.85rem',
-                            border: '1px solid #e5e7eb', borderRadius: '4px', outline: 'none', color: '#374151'
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Check-in Date */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '600', color: '#10b981', marginBottom: '0.5rem' }}>
-                        Ngày nhập chuồng:
-                      </label>
-                      <input
-                        type="datetime-local"
-                        defaultValue={new Date().toISOString().slice(0,16)}
-                        style={{
-                          width: '100%', padding: '0.65rem 1rem', fontSize: '0.85rem',
-                          border: '1px solid #e5e7eb', borderRadius: '4px', outline: 'none', color: '#374151'
-                        }}
-                      />
-                    </div>
-
-                    {/* Check-out Date */}
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '600', color: '#10b981', marginBottom: '0.5rem' }}>
-                        Ngày xuất chuồng:
-                      </label>
-                      <input
-                        type="datetime-local"
-                        disabled={admitSameDay}
-                        style={{
-                          width: '100%', padding: '0.65rem 1rem', fontSize: '0.85rem',
-                          border: '1px solid #e5e7eb', borderRadius: '4px', outline: 'none', color: '#9ca3af',
-                          backgroundColor: admitSameDay ? '#f9fafb' : 'white'
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer */}
-              <div style={{
-                padding: '1rem 1.5rem', borderTop: '1px solid #f3f4f6', display: 'flex',
-                justifyContent: 'space-between', alignItems: 'center'
-              }}>
-                {admitActiveTab === 'time' ? (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' }}>
-                    <input
-                      type="checkbox"
-                      checked={admitSameDay}
-                      onChange={(e) => setAdmitSameDay(e.target.checked)}
-                      style={{ width: '16px', height: '16px', accentColor: '#10b981' }}
-                    />
-                    <span>Lưu trong ngày</span>
-                  </label>
-                ) : <div />}
-                
-                <button type="submit" disabled={admitPetMutation.isPending || !selectedAdmitCageId} style={{
-                  padding: '0.55rem 1.25rem', borderRadius: '4px', border: 'none',
-                  background: (!selectedAdmitCageId || admitPetMutation.isPending) ? '#9ca3af' : 'linear-gradient(to right, #34d399, #14b8a6)', color: 'white',
-                  fontWeight: '600', cursor: (!selectedAdmitCageId || admitPetMutation.isPending) ? 'not-allowed' : 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.1)', fontSize: '0.85rem'
-                }}>
-                  {admitPetMutation.isPending ? 'Đang thực hiện...' : 'Xác nhận'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Pet Details Modal */}
       {isPetDetailsModalOpen && (() => {
@@ -3348,20 +2878,6 @@ const POSPage: React.FC = () => {
                 </div>
 
                 <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedMedicalRecordPet(pet);
-                      setIsMedicalRecordModalOpen(true);
-                    }}
-                    style={{
-                      padding: '0.55rem 1.5rem', borderRadius: '0.5rem', fontWeight: '600',
-                      backgroundColor: '#f97316', color: 'white', border: 'none', cursor: 'pointer',
-                      fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem'
-                    }}
-                  >
-                    <FileText size={16} /> Bệnh án
-                  </button>
                   <button type="button" onClick={() => setIsPetDetailsModalOpen(false)} style={{ padding: '0.55rem 1.5rem', borderRadius: '0.5rem', fontWeight: '600', backgroundColor: '#64748b', color: 'white', border: 'none', cursor: 'pointer', fontSize: '0.85rem' }}>
                     Đóng
                   </button>
@@ -3586,19 +3102,7 @@ const POSPage: React.FC = () => {
           </div>
         </div>
       )}
-      {isMedicalRecordModalOpen && (
-        <MedicalRecordModal
-          isOpen={isMedicalRecordModalOpen}
-          onClose={() => {
-            setIsMedicalRecordModalOpen(false);
-            setSelectedMedicalRecordPet(null);
-          }}
-          pet={selectedMedicalRecordPet}
-          onUpdateSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['pets', selectedCustomer?.id] });
-          }}
-        />
-      )}
+
     </div>
   );
 };

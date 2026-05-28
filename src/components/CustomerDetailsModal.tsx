@@ -2,12 +2,9 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, User, Phone, Mail, MapPin, Wallet, Plus, Calendar, Dog, Edit, Trash2, CheckCircle, XCircle, FileText } from 'lucide-react';
 import { type Customer, topUpWallet } from '../api/customers';
-import { getPetsByOwner, createPet, updatePet, deletePet } from '../api/pets';
 import { getCustomerAppointments, createAppointment, updateAppointment } from '../api/appointments';
 import { getOrders } from '../api/orders';
-import PetModal from './PetModal';
 import AppointmentModal from './AppointmentModal';
-import MedicalRecordModal from './MedicalRecordModal';
 import { ClipboardList } from 'lucide-react';
 import { useBranchContext } from '../context/BranchContext';
 
@@ -19,31 +16,19 @@ interface CustomerDetailsModalProps {
 
 const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onClose, customer }) => {
   const { selectedBranchId } = useBranchContext();
-  const [activeTab, setActiveTab] = useState<'pets' | 'appointments' | 'services'>('pets');
+  const [activeTab, setActiveTab] = useState<'pets' | 'appointments' | 'services'>('appointments');
   const queryClient = useQueryClient();
   const customerId = customer.id;
 
   // Modals visibility
-  const [isPetModalOpen, setIsPetModalOpen] = useState(false);
-  const [selectedPet, setSelectedPet] = useState<any>(null);
-
   const [isApptModalOpen, setIsApptModalOpen] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState<any>(null);
-
-  const [isMedicalRecordModalOpen, setIsMedicalRecordModalOpen] = useState(false);
-  const [selectedMedicalRecordPet, setSelectedMedicalRecordPet] = useState<any>(null);
 
   // Topup variable
   const [showTopup, setShowTopup] = useState(false);
   const [topupAmount, setTopupAmount] = useState('');
 
   // Queries
-  const { data: pets, isLoading: loadingPets } = useQuery({
-    queryKey: ['customerPets', customerId],
-    queryFn: () => getPetsByOwner(customerId),
-    enabled: isOpen,
-  });
-
   const { data: appointments, isLoading: loadingAppts } = useQuery({
     queryKey: ['customerAppointments', customerId],
     queryFn: () => getCustomerAppointments(customerId),
@@ -79,34 +64,6 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
     setCustBalance(customer.walletBalance);
   }, [customer]);
 
-  const petMutation = useMutation({
-    mutationFn: async ({ id, data }: { id?: string; data: any }) => {
-      const rawBranchId = selectedBranchId || localStorage.getItem('selectedBranchId');
-      const branchId = (!rawBranchId || rawBranchId === 'undefined' || rawBranchId === 'null') ? undefined : rawBranchId;
-      const payload = {
-        ...data,
-        branchId,
-      };
-      if (id) {
-        return updatePet(id, payload);
-      } else {
-        return createPet(payload);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customerPets', customerId] });
-      queryClient.invalidateQueries({ queryKey: ['pets'] });
-    },
-  });
-
-  const deletePetMutation = useMutation({
-    mutationFn: (id: string) => deletePet(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customerPets', customerId] });
-      queryClient.invalidateQueries({ queryKey: ['pets'] });
-    },
-  });
-
   const apptMutation = useMutation({
     mutationFn: async ({ id, data }: { id?: string; data: any }) => {
       if (id) {
@@ -133,9 +90,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
     topupMutation.mutate({ id: customerId, amount });
   };
 
-  const handlePetSubmit = async (data: any) => {
-    await petMutation.mutateAsync({ id: selectedPet?.id, data });
-  };
+
 
   const handleApptSubmit = async (data: any) => {
     await apptMutation.mutateAsync({ id: selectedAppt?.id, data });
@@ -311,6 +266,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
             
             {/* Tabs Selector */}
             <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border)', marginBottom: '1.5rem', paddingBottom: '0.25rem' }}>
+              {/*
               <button
                 onClick={() => setActiveTab('pets')}
                 style={{
@@ -324,6 +280,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                 <Dog size={18} />
                 Thú cưng ({pets?.length || 0})
               </button>
+              */}
               <button
                 onClick={() => setActiveTab('appointments')}
                 style={{
@@ -348,97 +305,17 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                 }}
               >
                 <ClipboardList size={18} />
-                Sổ khám bệnh / Dịch vụ ({serviceOrders?.length || 0})
+                Lịch sử dịch vụ ({serviceOrders?.length || 0})
               </button>
             </div>
 
             {/* Tab Contents */}
             <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+              {/*
               {activeTab === 'pets' && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#1e293b' }}>Danh sách thú cưng</h4>
-                    <button
-                      onClick={() => { setSelectedPet(null); setIsPetModalOpen(true); }}
-                      className="btn-primary"
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', fontSize: '0.875rem' }}
-                    >
-                      <Plus size={16} />
-                      Đăng ký thú cưng
-                    </button>
-                  </div>
-
-                  {loadingPets ? (
-                    <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>Đang tải danh sách...</div>
-                  ) : !pets || pets.length === 0 ? (
-                    <div style={{
-                      textAlign: 'center', padding: '4rem 2rem', color: '#94a3b8',
-                      border: '2px dashed var(--border)', borderRadius: '1rem'
-                    }}>
-                      <Dog size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
-                      <p style={{ margin: 0, fontWeight: '500' }}>Chưa đăng ký thú cưng nào cho khách hàng này.</p>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                      {pets.map((p) => (
-                        <div key={p.id} style={{
-                          border: '1px solid var(--border)', borderRadius: '1rem', padding: '1.25rem',
-                          backgroundColor: 'white', transition: 'all 0.2s', display: 'flex', flexDirection: 'column', gap: '0.75rem',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'rgba(99, 102, 241, 0.4)'; e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.05)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.02)'; }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                              <div style={{
-                                width: '40px', height: '40px', borderRadius: '0.75rem',
-                                backgroundColor: p.species === 'Cat' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(99, 102, 241, 0.1)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: p.species === 'Cat' ? '#10b981' : 'var(--primary)'
-                              }}>
-                                <Dog size={20} />
-                              </div>
-                              <div>
-                                <div style={{ fontWeight: '700', fontSize: '1rem', color: '#1e293b' }}>{p.name}</div>
-                                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.species === 'Cat' ? 'Mèo' : 'Chó'} • {p.breed || 'Chưa rõ giống'}</div>
-                              </div>
-                            </div>
-                            
-                            <div style={{ display: 'flex', gap: '0.25rem' }}>
-                              <button 
-                                onClick={() => { setSelectedMedicalRecordPet(p); setIsMedicalRecordModalOpen(true); }} 
-                                title="Bệnh án"
-                                style={{ padding: '0.4rem', border: 'none', backgroundColor: 'transparent', color: '#f97316', cursor: 'pointer' }}
-                              >
-                                <FileText size={15} />
-                              </button>
-                              <button onClick={() => { setSelectedPet(p); setIsPetModalOpen(true); }} style={{ padding: '0.4rem', border: 'none', backgroundColor: 'transparent', color: '#64748b', cursor: 'pointer' }}>
-                                <Edit size={15} />
-                              </button>
-                              <button onClick={() => { if(confirm(`Xóa thú cưng ${p.name}?`)) deletePetMutation.mutate(p.id); }} style={{ padding: '0.4rem', border: 'none', backgroundColor: 'transparent', color: '#ef4444', cursor: 'pointer' }}>
-                                <Trash2 size={15} />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.8rem', color: '#475569', backgroundColor: '#f8fafc', padding: '0.75rem', borderRadius: '0.5rem' }}>
-                            <div>Giới tính: <strong>{p.gender === 'male' ? 'Đực' : p.gender === 'female' ? 'Cái' : 'Chưa rõ'}</strong></div>
-                            <div>Cân nặng: <strong>{p.weight ? `${p.weight} kg` : 'Chưa rõ'}</strong></div>
-                            <div style={{ gridColumn: 'span 2' }}>Ngày sinh: <strong>{p.dateOfBirth ? new Date(p.dateOfBirth).toLocaleDateString('vi-VN') : 'Chưa rõ'}</strong></div>
-                          </div>
-
-                          {p.notes && (
-                            <div style={{ fontSize: '0.75rem', color: '#64748b', borderLeft: '3px solid #94a3b8', paddingLeft: '0.5rem', marginTop: '0.25rem' }}>
-                              {p.notes}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                ... (Pets listing code hidden)
               )}
+              */}
               {activeTab === 'appointments' && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -446,7 +323,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                     <button
                       onClick={() => { setSelectedAppt(null); setIsApptModalOpen(true); }}
                       className="btn-primary"
-                      disabled={!pets || pets.length === 0}
+                      disabled={false}
                       style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 1rem', fontSize: '0.875rem' }}
                     >
                       <Plus size={16} />
@@ -463,9 +340,6 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                     }}>
                       <Calendar size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
                       <p style={{ margin: 0, fontWeight: '500' }}>Khách hàng này chưa có công việc nào.</p>
-                      {!pets || pets.length === 0 ? (
-                        <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem', color: '#cbd5e1' }}>(Vui lòng đăng ký thú cưng trước khi tạo công việc)</p>
-                      ) : null}
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -504,9 +378,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                                     {appt.endDateTime && ` - ${new Date(appt.endDateTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`}
                                   </span>
                                   <span style={{ color: '#94a3b8' }}>•</span>
-                                  <span style={{ fontWeight: '600', color: '#4f46e5' }}>
-                                    Thú cưng: {appt.petId ? (appt.pet?.name || 'Thú cưng đã xóa') : 'Không chọn'}
-                                  </span>
+                                  <span style={{ hour: '2-digit', minute: '2-digit' } as any}></span>
                                 </div>
                                 <div style={{ fontSize: '0.875rem', color: '#475569', marginTop: '0.15rem' }}>
                                   Lý do: <strong>{appt.purpose}</strong>
@@ -563,7 +435,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
               {activeTab === 'services' && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#1e293b' }}>Sổ khám bệnh / Dịch vụ</h4>
+                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#1e293b' }}>Lịch sử dịch vụ</h4>
                   </div>
 
                   {loadingServices ? (
@@ -591,7 +463,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px dashed var(--border)', paddingBottom: '0.75rem' }}>
                               <div>
                                 <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '1rem' }}>Ngày: {orderDate.toLocaleDateString('vi-VN')}</div>
-                                <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Mã HĐ: {order.orderCode} • Thú cưng: <strong style={{color: '#4f46e5'}}>{order.pet?.name || 'Chưa rõ'}</strong></div>
+                                <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Mã HĐ: {order.orderCode}</div>
                               </div>
                               <div style={{ textAlign: 'right' }}>
                                 <span style={{
@@ -629,15 +501,6 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
 
       </div>
 
-      {/* Pet Registration Modal */}
-      <PetModal
-        isOpen={isPetModalOpen}
-        onClose={() => { setIsPetModalOpen(false); setSelectedPet(null); }}
-        onSubmit={handlePetSubmit}
-        pet={selectedPet}
-        ownerId={customerId}
-      />
-
       {/* Appointment Creation Modal */}
       <AppointmentModal
         isOpen={isApptModalOpen}
@@ -645,17 +508,6 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
         onSubmit={handleApptSubmit}
         customerId={customerId}
         appointment={selectedAppt}
-      />
-
-      {/* Medical Record Modal */}
-      <MedicalRecordModal
-        isOpen={isMedicalRecordModalOpen}
-        onClose={() => { setIsMedicalRecordModalOpen(false); setSelectedMedicalRecordPet(null); }}
-        pet={selectedMedicalRecordPet}
-        onUpdateSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ['customerPets', customerId] });
-          queryClient.invalidateQueries({ queryKey: ['pets'] });
-        }}
       />
 
     </div>

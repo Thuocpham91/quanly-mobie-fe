@@ -1,5 +1,4 @@
 import client, { type PaginatedResponse } from './client';
-import { type Pet } from './pets';
 import { type Customer } from './customers';
 
 export const AppointmentStatus = {
@@ -15,7 +14,7 @@ export type AppointmentStatus = typeof AppointmentStatus[keyof typeof Appointmen
 export interface Appointment {
   id: string;
   petId?: string;
-  pet?: Pet;
+  pet?: any;
   customerId?: string;
   customer?: Customer;
   branchId?: string;
@@ -42,11 +41,6 @@ export const getCustomerAppointments = async (customerId: string) => {
   return response.data;
 };
 
-export const getPetAppointments = async (petId: string) => {
-  const response = await client.get<Appointment[]>(`/appointments/pet/${petId}`);
-  return response.data;
-};
-
 export const createAppointment = async (data: Partial<Appointment>) => {
   const response = await client.post<Appointment>('/appointments', data);
   return response.data;
@@ -64,7 +58,6 @@ export const deleteAppointment = async (id: string) => {
 export default {
   getAppointments,
   getCustomerAppointments,
-  getPetAppointments,
   createAppointment,
   updateAppointment,
   deleteAppointment,

@@ -4,12 +4,10 @@ import LoginPage from './pages/LoginPage';
 import LandingPage from './pages/LandingPage';
 import DashboardLayout from './layouts/DashboardLayout';
 import DashboardHome from './pages/DashboardHome';
-import PetsPage from './pages/PetsPage';
 import CustomersPage from './pages/CustomersPage';
 import AppointmentsPage from './pages/AppointmentsPage';
 import UsersPage from './pages/UsersPage';
 import BranchesPage from './pages/BranchesPage';
-import BoardingPage from './pages/BoardingPage';
 import InventoryPage from './pages/InventoryPage';
 import InventoryImportPage from './pages/InventoryImportPage';
 import DistributorsPage from './pages/DistributorsPage';
@@ -19,6 +17,7 @@ import SettingsPage from './pages/SettingsPage';
 import ProductPricesPage from './pages/ProductPricesPage';
 import POSPage from './pages/POSPage';
 import OrdersHistoryPage from './pages/OrdersHistoryPage';
+import ServiceOrdersPage from './pages/ServiceOrdersPage';
 import StockHistoryPage from './pages/StockHistoryPage';
 import StocktakeListPage from './pages/StocktakeListPage';
 import StocktakeFormPage from './pages/StocktakeFormPage';
@@ -52,10 +51,8 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/admin" element={<DashboardLayout />}>
               <Route index element={<P path="/admin"><DashboardHome /></P>} />
-              <Route path="pets"                    element={<P path="/admin/pets"><PetsPage /></P>} />
               <Route path="customers"               element={<P path="/admin/customers"><CustomersPage /></P>} />
               <Route path="appointments"            element={<P path="/admin/appointments"><AppointmentsPage /></P>} />
-              <Route path="boarding"                element={<P path="/admin/boarding"><BoardingPage /></P>} />
               <Route path="inventory"               element={<P path="/admin/inventory"><InventoryPage /></P>} />
               <Route path="inventory/import"        element={<P path="/admin/inventory/import"><InventoryImportPage /></P>} />
               <Route path="inventory/transfer"      element={<P path="/admin/inventory/transfer"><InventoryTransferPage /></P>} />
@@ -66,6 +63,7 @@ function App() {
               <Route path="product-prices"          element={<P path="/admin/product-prices"><ProductPricesPage /></P>} />
               <Route path="pos"                     element={<P path="/admin/pos"><POSPage /></P>} />
               <Route path="orders"                  element={<P path="/admin/orders"><OrdersHistoryPage /></P>} />
+              <Route path="service-orders"          element={<P path="/admin/service-orders"><ServiceOrdersPage /></P>} />
               <Route path="distributors"            element={<P path="/admin/distributors"><DistributorsPage /></P>} />
               <Route path="users"                   element={<P path="/admin/users"><UsersPage /></P>} />
               <Route path="roles"                   element={<P path="/admin/roles"><RolesPage /></P>} />
