@@ -332,7 +332,7 @@ const ServiceOrderModal: React.FC<ServiceOrderModalProps> = ({
                     // Try to copy from customer's profile if linked
                     const found = matchedCustomers.find((c: any) => c.id === selectedCustId);
                     if (found && found.address) {
-                      setFormData(prev => ({ ...prev, address: found.address }));
+                      setFormData(prev => ({ ...prev, address: found.address || '' }));
                       return;
                     }
                   }
