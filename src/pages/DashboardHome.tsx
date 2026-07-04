@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   TrendingUp, ShoppingCart, DollarSign, Activity, Users,
   AlertTriangle, Calendar, Dog, ArrowUpRight, ArrowDownRight,
@@ -161,12 +162,15 @@ const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent
   );
 };
 
-const EmptyState: React.FC<{ message?: string }> = ({ message = "Không có dữ liệu" }) => (
-  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "0.5rem", color: "#94a3b8" }}>
-    <Package size={32} strokeWidth={1.5} />
-    <p style={{ fontSize: "0.875rem" }}>{message}</p>
-  </div>
-);
+const EmptyState: React.FC<{ message?: string }> = ({ message }) => {
+  const { t } = useTranslation();
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "0.5rem", color: "#94a3b8" }}>
+      <Package size={32} strokeWidth={1.5} />
+      <p style={{ fontSize: "0.875rem" }}>{message || t("dashboard.empty_state")}</p>
+    </div>
+  );
+};
 
 const Skeleton: React.FC<{ width?: string; height?: string; style?: React.CSSProperties }> = ({ width = "100%", height = "1rem", style }) => (
   <div style={{
@@ -177,6 +181,7 @@ const Skeleton: React.FC<{ width?: string; height?: string; style?: React.CSSPro
 );
 
 const DashboardHome: React.FC = () => {
+  const { t } = useTranslation();
   const { selectedBranchId } = useBranchContext();
   const [startDate, setStartDate] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split("T")[0]; });
   const [endDate,   setEndDate]   = useState(() => { const d = new Date(); d.setMonth(d.getMonth() + 1, 0); return d.toISOString().split("T")[0]; });
@@ -194,17 +199,17 @@ const DashboardHome: React.FC = () => {
   useEffect(() => { fetchData(); }, [startDate, endDate, selectedBranchId]);
 
   const quickRanges = [
-    { label: "Tuần này", getRange: () => { const now = new Date(); const s = new Date(now); s.setDate(now.getDate() - now.getDay() + 1); return [s.toISOString().split("T")[0], now.toISOString().split("T")[0]]; } },
-    { label: "Tháng này", getRange: () => { const now = new Date(); const s = new Date(now.getFullYear(), now.getMonth(), 1); const e = new Date(now.getFullYear(), now.getMonth() + 1, 0); return [s.toISOString().split("T")[0], e.toISOString().split("T")[0]]; } },
-    { label: "Quý này",   getRange: () => { const now = new Date(); const q = Math.floor(now.getMonth() / 3); const s = new Date(now.getFullYear(), q*3, 1); const e = new Date(now.getFullYear(), q*3+3, 0); return [s.toISOString().split("T")[0], e.toISOString().split("T")[0]]; } },
+    { label: t("dashboard.range_week"), getRange: () => { const now = new Date(); const s = new Date(now); s.setDate(now.getDate() - now.getDay() + 1); return [s.toISOString().split("T")[0], now.toISOString().split("T")[0]]; } },
+    { label: t("dashboard.range_month"), getRange: () => { const now = new Date(); const s = new Date(now.getFullYear(), now.getMonth(), 1); const e = new Date(now.getFullYear(), now.getMonth() + 1, 0); return [s.toISOString().split("T")[0], e.toISOString().split("T")[0]]; } },
+    { label: t("dashboard.range_quarter"),   getRange: () => { const now = new Date(); const q = Math.floor(now.getMonth() / 3); const s = new Date(now.getFullYear(), q*3, 1); const e = new Date(now.getFullYear(), q*3+3, 0); return [s.toISOString().split("T")[0], e.toISOString().split("T")[0]]; } },
   ];
 
   const stats = data ? [
-    { label: "Doanh thu",  value: data.totals.revenue,   isCurrency: true,  icon: <TrendingUp size={20} />,  gradient: GRADIENTS.revenue,   trend: 12 },
-    { label: "Giá vốn",    value: data.totals.cost,      isCurrency: true,  icon: <ShoppingCart size={20} />,gradient: GRADIENTS.cost,      trend: -3 },
-    { label: "Lợi nhuận",  value: data.totals.profit,    isCurrency: true,  icon: <DollarSign size={20} />,  gradient: GRADIENTS.profit,    trend: 18 },
-    { label: "Tổng đơn",   value: data.totals.orders,    isCurrency: false, icon: <Activity size={20} />,    gradient: GRADIENTS.orders },
-    { label: "Khách hàng", value: data.totals.customers, isCurrency: false, icon: <Users size={20} />,       gradient: GRADIENTS.customers },
+    { label: t("dashboard.revenue"),  value: data.totals.revenue,   isCurrency: true,  icon: <TrendingUp size={20} />,  gradient: GRADIENTS.revenue,   trend: 12 },
+    { label: t("dashboard.cost"),    value: data.totals.cost,      isCurrency: true,  icon: <ShoppingCart size={20} />,gradient: GRADIENTS.cost,      trend: -3 },
+    { label: t("dashboard.profit"),  value: data.totals.profit,    isCurrency: true,  icon: <DollarSign size={20} />,  gradient: GRADIENTS.profit,    trend: 18 },
+    { label: t("dashboard.total_orders"),   value: data.totals.orders,    isCurrency: false, icon: <Activity size={20} />,    gradient: GRADIENTS.orders },
+    { label: t("dashboard.customers"), value: data.totals.customers, isCurrency: false, icon: <Users size={20} />,       gradient: GRADIENTS.customers },
   ] : [];
 
   return (
@@ -225,9 +230,9 @@ const DashboardHome: React.FC = () => {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
           <div>
             <h1 style={{ fontSize: "1.75rem", fontWeight: "800", color: "var(--foreground)", marginBottom: "0.2rem" }}>
-              Bảng điều khiển
+              {t("dashboard.title")}
             </h1>
-            <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>Tổng quan hoạt động kinh doanh cửa hàng</p>
+            <p style={{ color: "#94a3b8", fontSize: "0.85rem" }}>{t("dashboard.subtitle")}</p>
           </div>
 
           <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
@@ -253,7 +258,7 @@ const DashboardHome: React.FC = () => {
                 style={{ border: "1px solid var(--border)", borderRadius: "0.5rem", padding: "0.35rem 0.5rem", fontSize: "0.8rem", background: "var(--background)", color: "var(--foreground)", cursor: "pointer" }} />
             </div>
 
-            <button className="dash-refresh" onClick={() => fetchData(true)} title="Làm mới" style={{
+            <button className="dash-refresh" onClick={() => fetchData(true)} title={t("dashboard.refresh_tooltip")} style={{
               display: "flex", alignItems: "center", justifyContent: "center",
               padding: "0.5rem", borderRadius: "0.5rem", background: "var(--card)",
               border: "1px solid var(--border)", cursor: "pointer", color: "#6366f1", transition: "all 0.2s",
@@ -280,7 +285,7 @@ const DashboardHome: React.FC = () => {
 
       {/* ── Line Chart ── */}
       <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "1rem", padding: "1.5rem", marginBottom: "1.5rem", boxShadow: "0 4px 24px rgba(0,0,0,0.06)", animation: "fadeUp 0.5s ease 0.15s both" }}>
-        <SectionHeader icon={<TrendingUp size={18} />} title="Biểu đồ doanh thu & lợi nhuận" iconColor="#6366f1" subtitle="Theo ngày trong khoảng thời gian đã chọn" />
+        <SectionHeader icon={<TrendingUp size={18} />} title={t("dashboard.chart_title")} iconColor="#6366f1" subtitle={t("dashboard.chart_subtitle")} />
         <div style={{ height: "300px" }}>
           {loading
             ? <Skeleton height="100%" style={{ borderRadius: "0.75rem" }} />
@@ -295,12 +300,12 @@ const DashboardHome: React.FC = () => {
                       stroke="#cbd5e1" tick={{ fontSize: 12, fill: "#94a3b8" }} axisLine={false} tickLine={false} width={55} />
                     <Tooltip content={<CustomTooltip />} />
                     <Legend iconType="circle" iconSize={8} formatter={v => <span style={{ fontSize: "0.8rem", color: "#475569", fontWeight: "600" }}>{v}</span>} />
-                    <Line type="monotone" name="Doanh thu" dataKey="revenue" stroke="#6366f1" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
-                    <Line type="monotone" name="Giá vốn"   dataKey="cost"    stroke="#ef4444" strokeWidth={2}   dot={false} activeDot={{ r: 4, strokeWidth: 0 }} strokeDasharray="5 3" />
-                    <Line type="monotone" name="Lợi nhuận" dataKey="profit"  stroke="#10b981" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+                    <Line type="monotone" name={t("dashboard.chart_revenue")} dataKey="revenue" stroke="#6366f1" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
+                    <Line type="monotone" name={t("dashboard.chart_cost")}   dataKey="cost"    stroke="#ef4444" strokeWidth={2}   dot={false} activeDot={{ r: 4, strokeWidth: 0 }} strokeDasharray="5 3" />
+                    <Line type="monotone" name={t("dashboard.chart_profit")} dataKey="profit"  stroke="#10b981" strokeWidth={2.5} dot={false} activeDot={{ r: 5, strokeWidth: 0 }} />
                   </LineChart>
                 </ResponsiveContainer>
-              ) : <EmptyState message="Không có dữ liệu trong khoảng thời gian này" />
+              ) : <EmptyState message={t("dashboard.empty_chart_data")} />
           }
         </div>
       </div>
@@ -308,7 +313,7 @@ const DashboardHome: React.FC = () => {
       {/* ── Pie Chart ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
         {[
-          { key: "appointments", title: `Lịch hẹn (${data?.appointments?.total ?? 0})`,   icon: <Calendar size={16} />, color: "#6366f1", chartData: data?.appointments?.data },
+          { key: "appointments", title: t("dashboard.appointments_title", { total: data?.appointments?.total ?? 0 }),   icon: <Calendar size={16} />, color: "#6366f1", chartData: data?.appointments?.data },
         ].map(({ key, title, icon, color, chartData }, delay) => (
           <div key={key} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "1rem", padding: "1.5rem", boxShadow: "0 4px 24px rgba(0,0,0,0.06)", animation: `fadeUp 0.5s ease ${0.2 + delay * 0.07}s both` }}>
             <SectionHeader icon={icon} title={title} iconColor={color} />
@@ -335,7 +340,7 @@ const DashboardHome: React.FC = () => {
         {/* Top Products */}
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "1rem", overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.06)", animation: "fadeUp 0.5s ease 0.4s both" }}>
           <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <SectionHeader icon={<TrendingUp size={16} />} title="Sản phẩm bán chạy" iconColor="#10b981" subtitle="Top 5 trong kỳ" />
+            <SectionHeader icon={<TrendingUp size={16} />} title={t("dashboard.top_products_title")} iconColor="#10b981" subtitle={t("dashboard.top_products_subtitle")} />
             <ChevronRight size={16} color="#94a3b8" />
           </div>
           {loading ? (
@@ -346,7 +351,7 @@ const DashboardHome: React.FC = () => {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
-                  {["#", "Sản phẩm", "SL", "Doanh thu"].map((h, i) => (
+                  {[t("dashboard.table_no"), t("dashboard.table_product"), t("dashboard.table_qty"), t("dashboard.table_revenue")].map((h, i) => (
                     <th key={h} style={{ padding: "0.75rem 1.25rem", textAlign: i === 2 ? "center" : i === 3 ? "right" : "left", fontSize: "0.7rem", fontWeight: "700", color: "#94a3b8", letterSpacing: "0.05em", textTransform: "uppercase" }}>{h}</th>
                   ))}
                 </tr>
@@ -369,7 +374,7 @@ const DashboardHome: React.FC = () => {
                     <td style={{ padding: "0.875rem 1.25rem", textAlign: "right", fontSize: "0.875rem", fontWeight: "700", color: "#6366f1" }}>{formatShort(p.revenue)}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={4} style={{ padding: "3rem", textAlign: "center", color: "#94a3b8", fontSize: "0.875rem" }}>Chưa có dữ liệu bán hàng</td></tr>
+                  <tr><td colSpan={4} style={{ padding: "3rem", textAlign: "center", color: "#94a3b8", fontSize: "0.875rem" }}>{t("dashboard.empty_sales")}</td></tr>
                 )}
               </tbody>
             </table>
@@ -379,10 +384,10 @@ const DashboardHome: React.FC = () => {
         {/* Low Stock */}
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "1rem", overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.06)", animation: "fadeUp 0.5s ease 0.48s both" }}>
           <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <SectionHeader icon={<AlertTriangle size={16} />} title="Cảnh báo sắp hết hàng" iconColor="#ef4444" />
+            <SectionHeader icon={<AlertTriangle size={16} />} title={t("dashboard.low_stock_title")} iconColor="#ef4444" />
             {(data?.lowStock?.length ?? 0) > 0 && (
               <span style={{ background: "#fef2f2", color: "#ef4444", fontSize: "0.72rem", fontWeight: "700", padding: "0.2rem 0.5rem", borderRadius: "1rem" }}>
-                {data!.lowStock.length} mặt hàng
+                {t("dashboard.low_stock_badge", { count: data!.lowStock.length })}
               </span>
             )}
           </div>
@@ -394,7 +399,7 @@ const DashboardHome: React.FC = () => {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
-                  {["Sản phẩm", "Còn lại", "Trạng thái"].map((h, i) => (
+                  {[t("dashboard.table_product"), t("dashboard.table_remaining"), t("dashboard.table_status")].map((h, i) => (
                     <th key={h} style={{ padding: "0.75rem 1.25rem", textAlign: i === 1 ? "right" : i === 2 ? "center" : "left", fontSize: "0.7rem", fontWeight: "700", color: "#94a3b8", letterSpacing: "0.05em", textTransform: "uppercase" }}>{h}</th>
                   ))}
                 </tr>
@@ -411,7 +416,7 @@ const DashboardHome: React.FC = () => {
                         color: l.remaining === 0 ? "#ef4444" : "#d97706",
                         border: `1px solid ${l.remaining === 0 ? "#fecaca" : "#fde68a"}`,
                       }}>
-                        {l.remaining === 0 ? "🔴 Hết hàng" : "🟡 Sắp hết"}
+                        {l.remaining === 0 ? t("dashboard.status_out") : t("dashboard.status_low")}
                       </span>
                     </td>
                   </tr>
@@ -422,8 +427,8 @@ const DashboardHome: React.FC = () => {
                         <div style={{ background: "#d1fae5", borderRadius: "50%", padding: "0.75rem", display: "inline-flex", color: "#10b981" }}>
                           <Package size={24} />
                         </div>
-                        <p style={{ fontSize: "0.875rem", fontWeight: "600", color: "#10b981", margin: 0 }}>Kho hàng đang an toàn</p>
-                        <p style={{ fontSize: "0.78rem", color: "#94a3b8", margin: 0 }}>Không có mặt hàng nào sắp hết</p>
+                        <p style={{ fontSize: "0.875rem", fontWeight: "600", color: "#10b981", margin: 0 }}>{t("dashboard.stock_safe_title")}</p>
+                        <p style={{ fontSize: "0.78rem", color: "#94a3b8", margin: 0 }}>{t("dashboard.stock_safe_desc")}</p>
                       </div>
                     </td>
                   </tr>

@@ -21,7 +21,7 @@ const SettingsPage: React.FC = () => {
   const [qrBank, setQrBank] = useState<string>(localStorage.getItem('qr_bank') || 'MB');
   const [qrAccount, setQrAccount] = useState<string>(localStorage.getItem('qr_account') || '');
   const [qrName, setQrName] = useState<string>(localStorage.getItem('qr_name') || '');
-  const [qrMemo, setQrMemo] = useState<string>(localStorage.getItem('qr_memo') || 'PKCare Thanh Toan');
+  const [qrMemo, setQrMemo] = useState<string>(localStorage.getItem('qr_memo') || 'MobiStore Thanh Toan');
 
   // Data fetching
   const { data: categories = [], isLoading: isLoadingCategories } = useQuery({
@@ -160,7 +160,7 @@ const SettingsPage: React.FC = () => {
           active={activeTab === 'qr_config'} 
           onClick={() => setActiveTab('qr_config')} 
           icon={<QrCode size={18} />} 
-          label="Cấu hình QR" 
+          label={t('settings.tab_qr_config')} 
         />
       </div>
 
@@ -178,14 +178,14 @@ const SettingsPage: React.FC = () => {
           {/* Form */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             <h2 style={{ fontSize: '1.15rem', fontWeight: '700', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-              Cấu hình tài khoản thanh toán (VietQR)
+              {t('settings.qr_title')}
             </h2>
-            <p style={{ color: '#64748b', fontSize: '#ef4444', margin: 0, lineHeight: '1.4' }}>
-              Cấu hình tài khoản ngân hàng của phòng khám để hệ thống tự động sinh mã QR chuyển khoản chính xác tại màn hình bán hàng (POS).
+            <p style={{ color: '#64748b', fontSize: '0.85rem', margin: 0, lineHeight: '1.4' }}>
+              {t('settings.qr_subtitle')}
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Ngân hàng *</label>
+              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>{t('settings.qr_bank')} *</label>
               <select
                 value={qrBank}
                 onChange={(e) => setQrBank(e.target.value)}
@@ -212,10 +212,10 @@ const SettingsPage: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Số tài khoản *</label>
+              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>{t('settings.qr_account')} *</label>
               <input
                 type="text"
-                placeholder="Ví dụ: 0987654321..."
+                placeholder={t('settings.qr_account_placeholder')}
                 value={qrAccount}
                 onChange={(e) => setQrAccount(e.target.value)}
                 style={{
@@ -229,10 +229,10 @@ const SettingsPage: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Tên chủ tài khoản *</label>
+              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>{t('settings.qr_holder')} *</label>
               <input
                 type="text"
-                placeholder="Ví dụ: NGUYEN VAN A"
+                placeholder={t('settings.qr_holder_placeholder')}
                 value={qrName}
                 onChange={(e) => setQrName(e.target.value)}
                 style={{
@@ -247,10 +247,10 @@ const SettingsPage: React.FC = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>Nội dung chuyển khoản mặc định</label>
+              <label style={{ fontSize: '0.82rem', fontWeight: '600', color: '#475569' }}>{t('settings.qr_memo')}</label>
               <input
                 type="text"
-                placeholder="Ví dụ: PKCare Thanh Toan"
+                placeholder={t('settings.qr_memo_placeholder')}
                 value={qrMemo}
                 onChange={(e) => setQrMemo(e.target.value)}
                 style={{
@@ -266,14 +266,14 @@ const SettingsPage: React.FC = () => {
             <button
               onClick={() => {
                 if (!qrAccount.trim() || !qrName.trim()) {
-                  alert('Vui lòng điền đầy đủ số tài khoản và tên chủ tài khoản!');
+                  alert(t('settings.qr_error_empty'));
                   return;
                 }
                 localStorage.setItem('qr_bank', qrBank);
                 localStorage.setItem('qr_account', qrAccount.trim());
                 localStorage.setItem('qr_name', qrName.trim().toUpperCase());
                 localStorage.setItem('qr_memo', qrMemo.trim());
-                alert('Đã lưu cấu hình tài khoản nhận thanh toán VietQR thành công!');
+                alert(t('settings.qr_success'));
               }}
               style={{
                 display: 'flex',
@@ -295,7 +295,7 @@ const SettingsPage: React.FC = () => {
               onMouseLeave={e => e.currentTarget.style.backgroundColor = '#10b981'}
             >
               <Save size={16} />
-              Lưu Cấu Hình QR
+              {t('settings.qr_btn_save')}
             </button>
           </div>
 
@@ -311,7 +311,7 @@ const SettingsPage: React.FC = () => {
             padding: '2rem',
             textAlign: 'center'
           }}>
-            <h3 style={{ fontSize: '0.9rem', fontWeight: '700', color: '#475569', marginBottom: '1.25rem', marginTop: 0 }}>Mã QR Demo Thanh Toán</h3>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: '700', color: '#475569', marginBottom: '1.25rem', marginTop: 0 }}>{t('settings.qr_preview_title')}</h3>
             
             {qrAccount.trim() && qrName.trim() ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
@@ -323,7 +323,7 @@ const SettingsPage: React.FC = () => {
                   />
                 </div>
                 <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
-                  Số tiền demo: <strong style={{ color: '#10b981' }}>100.000 ₫</strong>
+                  {t('settings.qr_preview_demo_amount')} <strong style={{ color: '#10b981' }}>100.000 ₫</strong>
                 </div>
                 <div style={{ fontSize: '0.8rem', color: '#1e293b', fontWeight: '600', lineHeight: '1.4' }}>
                   {qrBank} - {qrAccount} <br/>
@@ -333,7 +333,7 @@ const SettingsPage: React.FC = () => {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem', color: '#94a3b8' }}>
                 <QrCode size={56} style={{ opacity: 0.5 }} />
-                <span style={{ fontSize: '0.8rem', lineHeight: '1.4', maxWidth: '240px' }}>Vui lòng nhập Số tài khoản và Tên chủ tài khoản để xem trước mã QR chuyển khoản thực tế.</span>
+                <span style={{ fontSize: '0.8rem', lineHeight: '1.4', maxWidth: '240px' }}>{t('settings.qr_preview_placeholder')}</span>
               </div>
             )}
           </div>

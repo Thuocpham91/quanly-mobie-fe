@@ -16,6 +16,7 @@ import RolesPage from './pages/RolesPage';
 import SettingsPage from './pages/SettingsPage';
 import ProductPricesPage from './pages/ProductPricesPage';
 import POSPage from './pages/POSPage';
+import PoliciesPage from './pages/PoliciesPage';
 import OrdersHistoryPage from './pages/OrdersHistoryPage';
 import ServiceOrdersPage from './pages/ServiceOrdersPage';
 import StockHistoryPage from './pages/StockHistoryPage';
@@ -62,6 +63,7 @@ function App() {
               <Route path="products"                element={<P path="/admin/products"><ProductsPage /></P>} />
               <Route path="product-prices"          element={<P path="/admin/product-prices"><ProductPricesPage /></P>} />
               <Route path="pos"                     element={<P path="/admin/pos"><POSPage /></P>} />
+              <Route path="policies"                element={<P path="/admin/policies"><PoliciesPage /></P>} />
               <Route path="orders"                  element={<P path="/admin/orders"><OrdersHistoryPage /></P>} />
               <Route path="service-orders"          element={<P path="/admin/service-orders"><ServiceOrdersPage /></P>} />
               <Route path="distributors"            element={<P path="/admin/distributors"><DistributorsPage /></P>} />

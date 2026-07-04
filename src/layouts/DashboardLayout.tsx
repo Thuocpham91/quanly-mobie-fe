@@ -29,12 +29,28 @@ import {
   ShoppingBag,
   Tags,
   ClipboardCheck,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Wrench,
+  Coins,
+  GraduationCap,
+  Tag,
+  AlignLeft,
+  TrendingUp,
+  FileText
 } from 'lucide-react';
 
 const DashboardLayout: React.FC = () => {
   const location = useLocation();
   const { t } = useTranslation();
+  const bottomNavItems = [
+    { path: '/admin/pos',            icon: <Wrench size={18} />,          label: 'Giao Việc Kỹ Thuật' },
+    { path: '/admin/orders',         icon: <Coins size={18} />,           label: 'Thu Chi' },
+    { path: '/admin/appointments',   icon: <GraduationCap size={18} />,   label: 'Đào Tạo' },
+    { path: '/admin/service-orders', icon: <Tag size={18} />,             label: 'Báo Giá Dịch Vụ' },
+    { path: '/admin/policies',       icon: <AlignLeft size={18} />,       label: 'Nội Quy Chính Sách' },
+    { path: '/admin',                icon: <TrendingUp size={18} />,      label: 'Báo Cáo Doanh Số' },
+    { path: '/admin/customers',      icon: <FileText size={18} />,        label: 'Báo Cáo Công Nợ' },
+  ];
   const { selectedBranchId, setSelectedBranchId } = useBranchContext();
   const [isCollapsed, setIsCollapsed] = useState(window.innerWidth < 768);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -152,7 +168,7 @@ const DashboardLayout: React.FC = () => {
       label: 'Bán hàng',
       icon: <ShoppingCart size={18} />,
       items: [
-        { path: '/admin/pos',            icon: <ShoppingCart size={18} />, label: 'Bán hàng (POS)',      permission: 'sales.create' },
+        { path: '/admin/pos',            icon: <ClipboardCheck size={18} />, label: 'Form Kỹ Thuật',      permission: 'sales.create' },
         { path: '/admin/orders',         icon: <ShoppingBag size={18} />,  label: 'Lịch sử đơn hàng',   permission: 'history.view' },
         { path: '/admin/service-orders', icon: <ClipboardCheck size={18} />, label: 'Đơn hàng dịch vụ',  permission: 'sales.create' },
       ]
@@ -164,6 +180,7 @@ const DashboardLayout: React.FC = () => {
         { path: '/admin',              icon: <LayoutDashboard size={18} />, label: t('common.dashboard'),     permission: 'dashboard.view' },
         { path: '/admin/customers',    icon: <Users size={18} />,           label: t('common.customers'),     permission: 'customers.view' },
         { path: '/admin/appointments', icon: <Calendar size={18} />,        label: 'Công việc',           permission: 'appointments.view' },
+        { path: '/admin/policies',     icon: <AlignLeft size={18} />,       label: 'Nội quy chính sách',  permission: 'dashboard.view' },
       ]
     },
     {
@@ -650,6 +667,63 @@ const DashboardLayout: React.FC = () => {
         <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '1rem' : '2rem' }}>
           <Outlet />
         </div>
+
+        {isMobile && (
+          <div style={{
+            height: '64px',
+            backgroundColor: '#d81b60',
+            borderTop: '1px solid rgba(255,255,255,0.1)',
+            display: 'flex',
+            overflowX: 'auto',
+            scrollBehavior: 'smooth',
+            whiteSpace: 'nowrap',
+            boxShadow: '0 -4px 10px rgba(0,0,0,0.1)',
+            zIndex: 100,
+            boxSizing: 'border-box',
+            flexShrink: 0
+          }}>
+            {bottomNavItems.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  style={{
+                    flex: '0 0 95px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textDecoration: 'none',
+                    color: isActive ? 'white' : 'rgba(255,255,255,0.65)',
+                    fontWeight: isActive ? '700' : '500',
+                    gap: '0.2rem',
+                    backgroundColor: isActive ? 'rgba(255,255,255,0.12)' : 'transparent',
+                    transition: 'all 0.15s',
+                    boxSizing: 'border-box',
+                    padding: '6px 2px',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {item.icon}
+                  </div>
+                  <div style={{ 
+                    textAlign: 'center', 
+                    lineHeight: '1.15',
+                    fontSize: '0.62rem',
+                    whiteSpace: 'normal',
+                    width: '100%',
+                    wordBreak: 'break-word',
+                    padding: '0 2px'
+                  }}>
+                    {item.label}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </main>
 
       {/* Toast Notification Container */}

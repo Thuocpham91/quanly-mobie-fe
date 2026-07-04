@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, Dog, User, Phone, CheckCircle, XCircle, Trash2, Clock, ChevronLeft, ChevronRight, LayoutGrid, List as ListIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { getAppointments, createAppointment, updateAppointment, deleteAppointment, type Appointment } from '../api/appointments';
 import { useBranchContext } from '../context/BranchContext';
 import Pagination from '../components/Pagination';
@@ -8,6 +9,7 @@ import AppointmentModal from '../components/AppointmentModal';
 import { getUserPermissions } from '../guards/permissions';
 
 const AppointmentsPage: React.FC = () => {
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -113,26 +115,27 @@ const AppointmentsPage: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa cuộc hẹn này?')) {
+    if (window.confirm(t('appointments.delete_confirm'))) {
       deleteMutation.mutate(id);
     }
   };
 
   const formatDateTime = (dateStr: string, endDateStr?: string) => {
     const start = new Date(dateStr);
-    const datePart = start.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' });
-    const startTimePart = start.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const localeStr = i18n.language === 'en' ? 'en-US' : 'vi-VN';
+    const datePart = start.toLocaleDateString(localeStr, { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' });
+    const startTimePart = start.toLocaleTimeString(localeStr, { hour: '2-digit', minute: '2-digit' });
     
     if (endDateStr) {
       const end = new Date(endDateStr);
-      const endTimePart = end.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      const endTimePart = end.toLocaleTimeString(localeStr, { hour: '2-digit', minute: '2-digit' });
       if (start.toDateString() === end.toDateString()) {
         return {
           date: datePart,
           time: `${startTimePart} - ${endTimePart}`,
         };
       } else {
-        const endDatePart = end.toLocaleDateString('vi-VN', { year: 'numeric', month: 'numeric', day: 'numeric' });
+        const endDatePart = end.toLocaleDateString(localeStr, { year: 'numeric', month: 'numeric', day: 'numeric' });
         return {
           date: `${datePart} - ${endDatePart}`,
           time: `${startTimePart} - ${endTimePart}`,
@@ -150,13 +153,13 @@ const AppointmentsPage: React.FC = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.875rem', marginBottom: '0.25rem' }}>Quản lý công việc</h1>
-          <p style={{ color: '#64748b' }}>Quản lý và đặt lịch khám dịch vụ cho thú cưng.</p>
+          <h1 style={{ fontSize: '1.875rem', marginBottom: '0.25rem' }}>{t('appointments.title')}</h1>
+          <p style={{ color: '#64748b' }}>{t('appointments.subtitle')}</p>
         </div>
         {canManage && (
           <button onClick={handleAdd} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Plus size={18} />
-            Tạo công việc
+            {t('appointments.btn_create')}
           </button>
         )}
       </div>
@@ -175,7 +178,7 @@ const AppointmentsPage: React.FC = () => {
                 boxShadow: viewMode === 'list' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
               }}
             >
-              <ListIcon size={16} /> Danh sách
+              <ListIcon size={16} /> {t('appointments.view_list')}
             </button>
             <button
               onClick={() => setViewMode('calendar')}
@@ -186,7 +189,7 @@ const AppointmentsPage: React.FC = () => {
                 boxShadow: viewMode === 'calendar' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
               }}
             >
-              <LayoutGrid size={16} /> Lịch tháng
+              <LayoutGrid size={16} /> {t('appointments.view_calendar')}
             </button>
           </div>
 
@@ -195,7 +198,7 @@ const AppointmentsPage: React.FC = () => {
             <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
             <input 
               type="text" 
-              placeholder="Tìm theo thú cưng, khách hàng, số điện thoại..." 
+              placeholder={t('appointments.search_placeholder')} 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -211,10 +214,10 @@ const AppointmentsPage: React.FC = () => {
           {/* Status Tabs */}
           <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto' }}>
             {[
-              { value: 'ALL', label: 'Tất cả' },
-              { value: 'PENDING', label: 'Chờ xử lý' },
-              { value: 'COMPLETED', label: 'Hoàn thành' },
-              { value: 'CANCELLED', label: 'Đã hủy' }
+              { value: 'ALL', label: t('appointments.status_all') },
+              { value: 'PENDING', label: t('appointments.status_pending') },
+              { value: 'COMPLETED', label: t('appointments.status_completed') },
+              { value: 'CANCELLED', label: t('appointments.status_cancelled') }
             ].map((tab) => (
               <button
                 key={tab.value}
@@ -245,29 +248,29 @@ const AppointmentsPage: React.FC = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
               <tr>
-                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Thời gian</th>
-                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Khách hàng</th>
-                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Dịch vụ hẹn / Lý do</th>
-                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Trạng thái</th>
-                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem', textAlign: 'right' }}>Thao tác</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>{t('appointments.col_time')}</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>{t('appointments.col_customer')}</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>{t('appointments.col_purpose')}</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>{t('appointments.col_status')}</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem', textAlign: 'right' }}>{t('appointments.col_actions')}</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Đang tải danh sách công việc...</td>
+                  <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('appointments.loading')}</td>
                 </tr>
               ) : filteredAppointments.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Không tìm thấy đơn hàng nào.</td>
+                  <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('appointments.no_appointments')}</td>
                 </tr>
               ) : filteredAppointments.map((appt) => {
                 const { date, time } = formatDateTime(appt.dateTime, appt.endDateTime);
                 const statusColors = {
-                  PENDING: { bg: 'rgba(245, 158, 11, 0.1)', text: '#d97706', label: 'Chờ xử lý' },
-                  COMPLETED: { bg: 'rgba(16, 185, 129, 0.1)', text: '#059669', label: 'Hoàn thành' },
-                  CANCELLED: { bg: 'rgba(239, 68, 68, 0.1)', text: '#dc2626', label: 'Đã hủy' },
-                  NO_SHOW: { bg: 'rgba(107, 114, 128, 0.1)', text: '#4b5563', label: 'Không đến' },
+                  PENDING: { bg: 'rgba(245, 158, 11, 0.1)', text: '#d97706', label: t('appointments.status_pending') },
+                  COMPLETED: { bg: 'rgba(16, 185, 129, 0.1)', text: '#059669', label: t('appointments.status_completed') },
+                  CANCELLED: { bg: 'rgba(239, 68, 68, 0.1)', text: '#dc2626', label: t('appointments.status_cancelled') },
+                  NO_SHOW: { bg: 'rgba(107, 114, 128, 0.1)', text: '#4b5563', label: t('appointments.status_no_show') },
                 }[appt.status] || { bg: '#f1f5f9', text: '#475569', label: appt.status };
 
                 return (
@@ -291,10 +294,10 @@ const AppointmentsPage: React.FC = () => {
                         <div style={{ fontSize: '0.9rem', fontWeight: '700', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                           <User size={15} color="var(--primary)" />
                           {!appt.customerId ? (
-                            'Khách vãng lai'
+                            t('appointments.guest_customer')
                           ) : (
                             <>
-                              {appt.customer?.fullName || 'Khách hàng đã xóa'}
+                              {appt.customer?.fullName || t('appointments.deleted_customer')}
                             </>
                           )}
                         </div>
@@ -315,12 +318,12 @@ const AppointmentsPage: React.FC = () => {
                         </div>
                         {appt.user && (
                           <div style={{ fontSize: '0.75rem', color: '#0284c7', display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.1rem' }}>
-                            <span style={{ fontWeight: '600' }}>Phụ trách:</span> {appt.user.fullName}
+                            <span style={{ fontWeight: '600' }}>{t('appointments.assigned_to')}:</span> {appt.user.fullName}
                           </div>
                         )}
                         {appt.notes && (
                           <div style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic', display: 'flex', gap: '0.25rem', marginTop: '0.25rem' }}>
-                            <span style={{ fontWeight: '600' }}>Ghi chú:</span>
+                            <span style={{ fontWeight: '600' }}>{t('appointments.notes')}:</span>
                             <div dangerouslySetInnerHTML={{ __html: appt.notes }} className="html-notes-preview" style={{ display: 'inline', margin: 0 }} />
                           </div>
                         )}
@@ -349,14 +352,14 @@ const AppointmentsPage: React.FC = () => {
                           <>
                             <button
                               onClick={() => handleStatusChange(appt.id, 'COMPLETED')}
-                              title="Hoàn thành"
+                              title={t('appointments.btn_complete')}
                               style={{ padding: '0.4rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#059669', display: 'flex', alignItems: 'center' }}
                             >
                               <CheckCircle size={15} />
                             </button>
                             <button
                               onClick={() => handleStatusChange(appt.id, 'CANCELLED')}
-                              title="Hủy lịch"
+                              title={t('appointments.btn_cancel_appt')}
                               style={{ padding: '0.4rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#dc2626', display: 'flex', alignItems: 'center' }}
                             >
                               <XCircle size={15} />
@@ -366,7 +369,7 @@ const AppointmentsPage: React.FC = () => {
                         {canManage && (
                           <button
                             onClick={() => handleDelete(appt.id)}
-                            title="Xóa công việc"
+                            title={t('appointments.btn_delete')}
                             style={{ padding: '0.4rem', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', backgroundColor: 'transparent', color: '#ef4444', display: 'flex', alignItems: 'center' }}
                           >
                             <Trash2 size={15} />
@@ -396,7 +399,7 @@ const AppointmentsPage: React.FC = () => {
             <button onClick={prevMonth} style={{ padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid var(--border)', backgroundColor: 'white', cursor: 'pointer' }}>
               <ChevronLeft size={20} />
             </button>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0 }}>Tháng {currentMonth.getMonth() + 1}, {currentMonth.getFullYear()}</h2>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0 }}>{t('appointments.month_title', { month: currentMonth.getMonth() + 1, year: currentMonth.getFullYear() })}</h2>
             <button onClick={nextMonth} style={{ padding: '0.5rem', borderRadius: '0.5rem', border: '1px solid var(--border)', backgroundColor: 'white', cursor: 'pointer' }}>
               <ChevronRight size={20} />
             </button>
@@ -404,13 +407,13 @@ const AppointmentsPage: React.FC = () => {
           
           {/* Calendar Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--border)', backgroundColor: '#f8fafc' }}>
-            {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(day => (
+            {(i18n.language === 'en' ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] : ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN']).map(day => (
               <div key={day} style={{ padding: '0.75rem', textAlign: 'center', fontWeight: '600', fontSize: '0.875rem', color: '#64748b' }}>{day}</div>
             ))}
           </div>
           
           {isCalendarLoading ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Đang tải lịch tháng...</div>
+            <div style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('appointments.calendar_loading')}</div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', backgroundColor: 'var(--border)', gap: '1px' }}>
               {Array.from({ length: startingDay }).map((_, i) => (

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Plus, Edit2, Trash2, Box, Layers, Tag, Ruler } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { 
   getProducts, deleteProduct, type Product,
   createProduct, updateProduct,
@@ -13,6 +14,7 @@ import ProductModal from '../components/ProductModal';
 import { useBranchContext } from '../context/BranchContext';
 
 const ProductsPage: React.FC = () => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'units' | 'groups'>('products');
@@ -85,8 +87,8 @@ const ProductsPage: React.FC = () => {
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const isAdmin = user.role === 'admin';
     const message = isAdmin 
-      ? 'Bạn là Admin, hành động này sẽ XÓA VĨNH VIỄN sản phẩm. Bạn có chắc chắn?' 
-      : 'Sản phẩm sẽ được chuyển vào danh sách lưu trữ (Xóa mềm). Bạn có chắc chắn?';
+      ? t('products.delete_confirm_admin') 
+      : t('products.delete_confirm_user');
       
     if (window.confirm(message)) {
       deleteMutation.mutate(id);
@@ -105,8 +107,8 @@ const ProductsPage: React.FC = () => {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: '1.875rem', fontWeight: '700', color: '#1e293b' }}>Quản lý sản phẩm</h1>
-          <p style={{ color: '#64748b', marginTop: '0.25rem' }}>Danh mục sản phẩm, đơn vị tính và phân loại</p>
+          <h1 style={{ fontSize: '1.875rem', fontWeight: '700', color: '#1e293b' }}>{t('products.title')}</h1>
+          <p style={{ color: '#64748b', marginTop: '0.25rem' }}>{t('products.subtitle')}</p>
         </div>
         <button 
           className="btn-primary" 
@@ -114,16 +116,16 @@ const ProductsPage: React.FC = () => {
           style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem' }}
         >
           <Plus size={20} />
-          Thêm sản phẩm
+          {t('products.add_new')}
         </button>
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
-        <TabItem active={activeTab === 'products'} onClick={() => setActiveTab('products')} icon={<Box size={18} />} label="Sản phẩm" />
-        <TabItem active={activeTab === 'categories'} onClick={() => setActiveTab('categories')} icon={<Layers size={18} />} label="Danh mục" />
-        <TabItem active={activeTab === 'units'} onClick={() => setActiveTab('units')} icon={<Ruler size={18} />} label="Đơn vị tính" />
-        <TabItem active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} icon={<Tag size={18} />} label="Nhóm hàng" />
+        <TabItem active={activeTab === 'products'} onClick={() => setActiveTab('products')} icon={<Box size={18} />} label={t('products.tab_products')} />
+        <TabItem active={activeTab === 'categories'} onClick={() => setActiveTab('categories')} icon={<Layers size={18} />} label={t('products.tab_categories')} />
+        <TabItem active={activeTab === 'units'} onClick={() => setActiveTab('units')} icon={<Ruler size={18} />} label={t('products.tab_units')} />
+        <TabItem active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} icon={<Tag size={18} />} label={t('products.tab_groups')} />
       </div>
 
       {/* Search & Actions */}
@@ -132,7 +134,7 @@ const ProductsPage: React.FC = () => {
           <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
           <input 
             type="text" 
-            placeholder="Tìm kiếm..." 
+            placeholder={t('products.search_placeholder')} 
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -148,37 +150,37 @@ const ProductsPage: React.FC = () => {
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead style={{ backgroundColor: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
             <tr>
-              <th style={{ padding: '1rem' }}>STT</th>
+              <th style={{ padding: '1rem' }}>{t('products.table_stt')}</th>
               {activeTab === 'products' ? (
                 <>
-                  <th style={{ padding: '1rem' }}>Mã/Barcode</th>
-                  <th style={{ padding: '1rem' }}>Tên sản phẩm</th>
-                  <th style={{ padding: '1rem' }}>Danh mục</th>
-                  <th style={{ padding: '1rem' }}>Đơn vị</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>Tồn kho</th>
-                  <th style={{ padding: '1rem' }}>Nhà sản xuất</th>
+                  <th style={{ padding: '1rem' }}>{t('products.table_barcode')}</th>
+                  <th style={{ padding: '1rem' }}>{t('products.table_name')}</th>
+                  <th style={{ padding: '1rem' }}>{t('products.table_category')}</th>
+                  <th style={{ padding: '1rem' }}>{t('products.table_unit')}</th>
+                  <th style={{ padding: '1rem', textAlign: 'center' }}>{t('products.table_stock')}</th>
+                  <th style={{ padding: '1rem' }}>{t('products.table_manufacturer')}</th>
                 </>
               ) : (
                 <>
-                  <th style={{ padding: '1rem' }}>Tên</th>
-                  <th style={{ padding: '1rem' }}>Mô tả</th>
+                  <th style={{ padding: '1rem' }}>{t('products.table_name')}</th>
+                  <th style={{ padding: '1rem' }}>{t('products.table_description')}</th>
                 </>
               )}
-              <th style={{ padding: '1rem', textAlign: 'center' }}>Thao tác</th>
+              <th style={{ padding: '1rem', textAlign: 'center' }}>{t('products.table_actions')}</th>
             </tr>
           </thead>
           <tbody>
             {loadingProducts ? (
               <tr>
                 <td colSpan={activeTab === 'products' ? 8 : 4} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-                  Đang tải dữ liệu...
+                  {t('products.loading')}
                 </td>
               </tr>
             ) : activeTab === 'products' ? (
               filteredProducts.length === 0 ? (
                 <tr>
                   <td colSpan={8} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-                    Không tìm thấy sản phẩm nào.
+                    {t('products.no_products')}
                   </td>
                 </tr>
               ) : (
@@ -193,7 +195,7 @@ const ProductsPage: React.FC = () => {
                       {p.name}
                       {p.isService && (
                         <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', padding: '0.1rem 0.4rem', backgroundColor: '#e0e7ff', color: '#4f46e5', borderRadius: '4px' }}>
-                          Dịch vụ
+                          {t('products.service_badge')}
                         </span>
                       )}
                     </td>
@@ -224,7 +226,7 @@ const ProductsPage: React.FC = () => {
             ) : (activeTab === 'categories' ? categories : activeTab === 'units' ? units : groups).length === 0 ? (
               <tr>
                 <td colSpan={4} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
-                  Không có dữ liệu.
+                  {t('products.no_data')}
                 </td>
               </tr>
             ) : (
