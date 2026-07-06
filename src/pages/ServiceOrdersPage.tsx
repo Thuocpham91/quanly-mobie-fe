@@ -4,6 +4,7 @@ import { Search, Plus, Edit, Trash2, Calendar, Clock, MapPin, User, DollarSign, 
 import { getServiceOrders, createServiceOrder, updateServiceOrder, deleteServiceOrder, type ServiceOrder, type ServiceOrderStatus } from '../api/service-orders';
 import ServiceOrderModal from '../components/ServiceOrderModal';
 import Pagination from '../components/Pagination';
+import { useBranchContext } from '../context/BranchContext';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -16,6 +17,7 @@ const formatDate = (dateStr?: string) => {
 
 const ServiceOrdersPage: React.FC = () => {
   const queryClient = useQueryClient();
+  const { selectedBranchId } = useBranchContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [page, setPage] = useState(1);
@@ -24,9 +26,14 @@ const ServiceOrdersPage: React.FC = () => {
 
   // Fetch Service Orders
   const { data: paginatedData, isLoading } = useQuery({
-    queryKey: ['serviceOrders', page, statusFilter, searchTerm],
+    queryKey: ['serviceOrders', selectedBranchId, page, statusFilter, searchTerm],
     queryFn: () => getServiceOrders(page, 10, statusFilter === 'ALL' ? undefined : statusFilter, searchTerm),
   });
+
+  // Reset page when branch/filter/search changes
+  React.useEffect(() => {
+    setPage(1);
+  }, [selectedBranchId, statusFilter, searchTerm]);
 
   const serviceOrders = paginatedData?.data || [];
   const meta = paginatedData?.meta;

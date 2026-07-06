@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import LanguageSwitcher from '../components/LanguageSwitcher';
 import { useBranchContext } from '../context/BranchContext';
 import branchesApi from '../api/branches';
-import { connectSocket, disconnectSocket } from '../api/socket';
+import { requestForToken, onMessageListener } from '../api/firebase';
 import { 
   LayoutDashboard, 
   Cpu, 
@@ -44,7 +44,6 @@ const DashboardLayout: React.FC = () => {
   const { t } = useTranslation();
   const bottomNavItems = [
     { path: '/admin/pos',            icon: <Wrench size={18} />,          label: 'Giao Việc Kỹ Thuật' },
-    { path: '/admin/orders',         icon: <Coins size={18} />,           label: 'Thu Chi' },
     { path: '/admin/appointments',   icon: <GraduationCap size={18} />,   label: 'Đào Tạo' },
     { path: '/admin/service-orders', icon: <Tag size={18} />,             label: 'Báo Giá Dịch Vụ' },
     { path: '/admin/policies',       icon: <AlignLeft size={18} />,       label: 'Nội Quy Chính Sách' },
@@ -88,32 +87,41 @@ const DashboardLayout: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+
+
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
-      const socket = connectSocket(token);
-      
-      socket.on('notification', (data: any) => {
-        console.log('🔔 Notification Received:', data);
-        const type = data.type || 'info';
-        const message = data.message || 'Có thông báo mới';
-        
-        const id = Math.random().toString(36).substring(2, 9);
-        setToasts(prev => [...prev, {
-          id,
-          type: type as any,
-          message,
-          timestamp: new Date().toISOString(),
-          duration: 6000
-        }]);
-        
-        setTimeout(() => {
-          setToasts(prev => prev.filter(t => t.id !== id));
-        }, 6000);
+      // Request Firebase Messaging token and register it
+      requestForToken().catch((err) => {
+        console.error('FCM Token registration failed:', err);
       });
-      
+
+      // Listen for foreground Firebase messages
+      const unsubscribe = onMessageListener((payload: any) => {
+        console.log('Foreground notification payload:', payload);
+        if (payload?.notification) {
+          const id = Math.random().toString(36).substring(2, 9);
+          setToasts((prev) => [
+            ...prev,
+            {
+              id,
+              type: 'info',
+              message: `${payload.notification.title}: ${payload.notification.body}`,
+              timestamp: new Date().toISOString(),
+              duration: 6000,
+            },
+          ]);
+          setTimeout(() => {
+            setToasts((prev) => prev.filter((t) => t.id !== id));
+          }, 6000);
+        }
+      });
+
       return () => {
-        disconnectSocket();
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
+        }
       };
     }
   }, []);
@@ -169,7 +177,6 @@ const DashboardLayout: React.FC = () => {
       icon: <ShoppingCart size={18} />,
       items: [
         { path: '/admin/pos',            icon: <ClipboardCheck size={18} />, label: 'Form Kỹ Thuật',      permission: 'sales.create' },
-        { path: '/admin/orders',         icon: <ShoppingBag size={18} />,  label: 'Lịch sử đơn hàng',   permission: 'history.view' },
         { path: '/admin/service-orders', icon: <ClipboardCheck size={18} />, label: 'Đơn hàng dịch vụ',  permission: 'sales.create' },
       ]
     },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Calendar, 
   Clock, 
@@ -39,6 +39,7 @@ const generateRandomId = (length = 8) => {
 };
 
 const POSPage: React.FC = () => {
+  const queryClient = useQueryClient();
   // Generated IDs
   const [formId] = useState(() => generateRandomId(8));
   const [orderCode, setOrderCode] = useState(() => generateRandomId(8));
@@ -274,6 +275,7 @@ const POSPage: React.FC = () => {
   const createOrderMutation = useMutation({
     mutationFn: (payload: CreateServiceOrderPayload & any) => createServiceOrder(payload),
     onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['serviceOrders'] });
       alert(`Đã lưu Form Kỹ Thuật thành công! Mã đơn hàng: ${data.orderCode || orderCode}`);
       // Clear form except IDs
       setCustomerSearch('');
@@ -930,7 +932,7 @@ const POSPage: React.FC = () => {
 
       {/* Location Selector Modal */}
       {isLocationModalOpen && (
-        <div style={modalOverlayStyle}>
+        <div style={{ ...modalOverlayStyle, zIndex: 1200 }}>
           <div style={{ ...modalContentStyle, maxWidth: '480px' }}>
             <div style={modalHeaderStyle}>
               <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
