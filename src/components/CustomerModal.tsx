@@ -145,7 +145,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
             {/* Phone */}
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
-                <span style={{color: '#ef4444'}}>*</span> {t('customers.label_phone')}
+                {t('customers.label_phone')}
               </label>
               <div style={{ position: 'relative' }}>
                 <Phone size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
@@ -154,7 +154,6 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  required
                   placeholder="0123456789"
                   style={{
                     width: '100%',

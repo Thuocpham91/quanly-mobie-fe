@@ -63,13 +63,20 @@ export const createOrder = async (orderData: CreateOrderPayload): Promise<Order>
   }
 };
 
-export const getOrders = async (page = 1, limit = 10, petId?: string, customerId?: string, search?: string): Promise<PaginatedResponse<Order>> => {
+export const getOrders = async (
+  page = 1,
+  limit = 10,
+  petId?: string,
+  customerId?: string,
+  search?: string,
+  status?: string,
+): Promise<PaginatedResponse<Order>> => {
   const params: any = { page, limit };
   if (petId) params.petId = petId;
   if (customerId) params.customerId = customerId;
   if (search) params.search = search;
+  if (status) params.status = status;
   const response = await api.get('/orders', { params });
-  // Map flat response { data, total } → PaginatedResponse chuẩn
   const raw = response.data;
   if (raw && typeof raw.total === 'number' && !raw.meta) {
     return {
@@ -87,6 +94,30 @@ export const getOrders = async (page = 1, limit = 10, petId?: string, customerId
 
 export const getOrderById = async (id: string): Promise<Order> => {
   const response = await api.get(`/orders/${id}`);
+  return response.data;
+};
+
+export const importOrdersExcel = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await api.post<{ imported: number; errors: any[]; errorFile?: string; errorFileName?: string }>('/orders/import', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};
+
+export const importOrderDetailsExcel = async (file: File, options?: { createMissingOrders?: boolean; skipStockDeduction?: boolean }) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const params = new URLSearchParams();
+  if (options?.createMissingOrders === false) params.set('createMissingOrders', 'false');
+  if (options?.skipStockDeduction === false) params.set('skipStockDeduction', 'false');
+  const url = `/orders/import-details${params.toString() ? `?${params.toString()}` : ''}`;
+  const response = await api.post<{ imported: number; errors: any[]; errorFile?: string; errorFileName?: string }>(url, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
   return response.data;
 };
 

@@ -6,6 +6,7 @@ export interface User {
   email: string;
   fullName: string;
   isActive: boolean;
+  password?: string;
   gender?: 'Nam' | 'Nữ' | 'Khác';
   dateOfBirth?: string;
   idCard?: string;

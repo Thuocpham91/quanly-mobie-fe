@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { searchCustomers, createCustomer, type Customer } from '../api/customers';
 import { getUsers } from '../api/users';
-import { createServiceOrder, type CreateServiceOrderPayload } from '../api/service-orders';
+import { createOrder, type CreateOrderPayload } from '../api/orders';
 import LocationSelector from '../components/LocationSelector';
 import type { LocationItem } from '../api/locations';
 
@@ -271,11 +271,11 @@ const POSPage: React.FC = () => {
     createCustomerMutation.mutate(payload);
   };
 
-  // Form submission mutation
+  // Form submission mutation (creates an Order as technical form)
   const createOrderMutation = useMutation({
-    mutationFn: (payload: CreateServiceOrderPayload & any) => createServiceOrder(payload),
+    mutationFn: (payload: CreateOrderPayload & any) => createOrder(payload),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['serviceOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['salesOrders'] });
       alert(`Đã lưu Form Kỹ Thuật thành công! Mã đơn hàng: ${data.orderCode || orderCode}`);
       // Clear form except IDs
       setCustomerSearch('');
@@ -305,36 +305,39 @@ const POSPage: React.FC = () => {
       return;
     }
 
-    const payload = {
-      customerId: selectedCustomer?.id || undefined,
-      appointmentDate,
-      appointmentTime,
-      deadline,
-      address,
-      customerLocation,
-      jobDescription,
-      completedItems,
-      quotedAmount,
-      discount,
-      status: 'PENDING', // Default pending
-      // Extended fields
-      id: formId,
+    const createDto: CreateOrderPayload & any = {
       orderCode,
-      customerName,
-      customerPhone,
-      paidAmount,
-      orderType,
-      workStatus: selectedWorkStatus,
-      failReason,
-      warrantyTime: selectedWarrantyTime,
-      customerSource: selectedCustomerSource,
-      csStaff: selectedCsStaff,
-      assignee: selectedAssignee,
-      costPrice,
-      priority: selectedPriority
+      customerId: selectedCustomer?.id || undefined,
+      invoiceTotal: quotedAmount,
+      discount,
+      status: 'PENDING',
+      paymentMethod: paidAmount > 0 ? 'CASH' : 'CASH',
+      notes: JSON.stringify({
+        formId,
+        appointmentDate,
+        appointmentTime,
+        deadline,
+        address,
+        customerLocation,
+        jobDescription,
+        completedItems,
+        paidAmount,
+        orderType,
+        workStatus: selectedWorkStatus,
+        failReason,
+        warrantyTime: selectedWarrantyTime,
+        customerSource: selectedCustomerSource,
+        csStaff: selectedCsStaff,
+        assignee: selectedAssignee,
+        costPrice,
+        priority: selectedPriority,
+        customerName,
+        customerPhone,
+      }),
+      items: [],
     };
 
-    createOrderMutation.mutate(payload);
+    createOrderMutation.mutate(createDto);
   };
 
   return (

@@ -30,7 +30,7 @@ export interface DashboardStatisticsResponse {
     total: number;
     data: { name: string; value: number }[];
   };
-  topProducts: { name: string; sold: number; revenue: number }[];
+  topProducts: { id: string; name: string; sold: number; revenue: number }[];
   lowStock: { name: string; remaining: number }[];
 }
 

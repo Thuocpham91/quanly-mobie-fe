@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, FileDown, Edit2, Trash2 } from 'lucide-react';
+import { Search, Plus, FileDown, Edit2, Trash2, FileSpreadsheet } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import Pagination from '../components/Pagination';
 import { 
   getInventoryBatches, 
   deleteInventoryBatch,
   type Product, type InventoryBatch
 } from '../api/inventory';
 import { useBranchContext } from '../context/BranchContext';
+import { processInventoryUpload } from '../api/inventory';
 import * as XLSX from 'xlsx';
 
 const InventoryPage: React.FC = () => {
@@ -19,16 +21,20 @@ const InventoryPage: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDistributorId, setFilterDistributorId] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
 
   // Modals state (none)
 
   // Fetch Data
-  const { data: batches = [], isLoading: isLoadingBatches } = useQuery({
-    queryKey: ['inventoryBatches', selectedBranchId],
-    queryFn: () => getInventoryBatches(selectedBranchId!),
+  const { data: paginatedBatches, isLoading: isLoadingBatches } = useQuery({
+    queryKey: ['inventoryBatches', selectedBranchId, page, limit],
+    queryFn: () => getInventoryBatches(selectedBranchId!, page, limit),
     enabled: !!selectedBranchId,
   });
 
+  const batches = paginatedBatches?.data || [];
+  const meta = paginatedBatches?.meta || { total: 0, page, limit, totalPages: 1 };
 
   const { data: distributors = [] } = useQuery({
     queryKey: ['distributors'],
@@ -42,6 +48,42 @@ const InventoryPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
     }
   });
+
+  const [isImportingLegacy, setIsImportingLegacy] = React.useState(false);
+  const [importErrors, setImportErrors] = React.useState<any[]>([]);
+  const legacyFileRef = React.useRef<HTMLInputElement | null>(null);
+
+  const handleLegacyFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!selectedBranchId) {
+      alert('Vui lòng chọn chi nhánh trước khi import.');
+      e.target.value = '';
+      return;
+    }
+
+    setIsImportingLegacy(true);
+    setImportErrors([]);
+    try {
+      const res = await processInventoryUpload(file, selectedBranchId);
+      const success = res?.imported ?? res?.success ?? 0;
+      const errors = res?.errors ?? res?.failed ?? [];
+      if (success > 0) alert(`Import thành công ${success} bản ghi`);
+      if (errors.length > 0) {
+        setImportErrors(errors);
+        alert(`Một số dòng không hợp lệ. Vui lòng tải file lỗi để xem chi tiết.`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
+      queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err?.response?.data?.message || err.message || 'Có lỗi khi import';
+      alert(errMsg);
+    } finally {
+      setIsImportingLegacy(false);
+      e.target.value = '';
+    }
+  };
 
   // Filtering
   const filteredBatches = batches.filter((batch: InventoryBatch) => {
@@ -111,7 +153,14 @@ const InventoryPage: React.FC = () => {
           <p style={{ color: '#64748b' }}>Chi tiết lô hàng và hạn dùng theo nhà cung cấp</p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            style={{ display: 'none' }}
+            ref={legacyFileRef}
+            onChange={handleLegacyFileChange}
+          />
           <button 
             className="btn-secondary" 
             onClick={handleExportExcel}
@@ -120,6 +169,38 @@ const InventoryPage: React.FC = () => {
             <FileDown size={16} />
             {t('inventory.btn_export')}
           </button>
+          <button
+            className="btn-secondary"
+            onClick={() => legacyFileRef.current?.click()}
+            disabled={isImportingLegacy}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem' }}
+          >
+            <FileSpreadsheet size={16} />
+            {isImportingLegacy ? 'Đang import...' : 'Import cũ'}
+          </button>
+          {importErrors.length > 0 && (
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                // generate and download excel of errors
+                const exportData = importErrors.map((err: any, idx: number) => ({
+                  STT: idx + 1,
+                  DONG: err.row ?? err.rowNum ?? '',
+                  PRODUCT: err.product ?? err.productIdentifier ?? '',
+                  REASON: err.reason ?? err.message ?? JSON.stringify(err),
+                }));
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Errors');
+                ws['!cols'] = [{ wch: 6 }, { wch: 10 }, { wch: 30 }, { wch: 80 }];
+                XLSX.writeFile(wb, `import_errors_${new Date().toISOString().slice(0, 10)}.xlsx`);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem' }}
+            >
+              <FileDown size={16} />
+              Tải lỗi ({importErrors.length})
+            </button>
+          )}
           <button 
             className="btn-primary" 
             onClick={() => navigate('/admin/inventory/import')}
@@ -142,7 +223,7 @@ const InventoryPage: React.FC = () => {
               type="text" 
               placeholder={t('common.search_placeholder')} 
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
               style={{
                 width: '100%', padding: '0.6rem 1rem 0.6rem 2.5rem',
                 borderRadius: '0.5rem', border: '1px solid #e2e8f0', outline: 'none',
@@ -155,7 +236,7 @@ const InventoryPage: React.FC = () => {
             className="form-control"
             style={{ maxWidth: '250px' }}
             value={filterDistributorId}
-            onChange={(e) => setFilterDistributorId(e.target.value)}
+            onChange={(e) => { setFilterDistributorId(e.target.value); setPage(1); }}
           >
             <option value="">-- Tất cả nhà cung cấp --</option>
             {distributors.map((d: any) => (
@@ -213,6 +294,13 @@ const InventoryPage: React.FC = () => {
           </table>
         </div>
       </div>
+
+      <Pagination
+        currentPage={page}
+        totalPages={meta.totalPages}
+        onPageChange={setPage}
+        totalItems={meta.total}
+      />
 
       {/* Modals (handled via navigation) */}
     </div>

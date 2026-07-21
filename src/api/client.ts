@@ -18,7 +18,11 @@ api.interceptors.request.use((config) => {
   if (branchId && branchId !== 'undefined' && branchId !== 'null') {
     config.headers['x-branch-id'] = branchId;
   }
-  
+
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+
   return config;
 });
 

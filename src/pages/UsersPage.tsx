@@ -10,6 +10,7 @@ import {
   Trash2,
   CheckCircle,
   XCircle,
+  Key,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import usersApi, { type User } from "../api/users";
@@ -28,6 +29,15 @@ const UsersPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const { selectedBranchId } = useBranchContext();
+
+  // Password change states
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [passwordUser, setPasswordUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
 
   const { data: paginatedData, isLoading } = useQuery<PaginatedResponse<User>>({
     queryKey: ["users", selectedBranchId, page],
@@ -89,6 +99,52 @@ const UsersPage: React.FC = () => {
   const openEditModal = (user: User) => {
     setSelectedUser(user);
     setIsModalOpen(true);
+  };
+
+  const openChangePasswordModal = (user: User) => {
+    setPasswordUser(user);
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordError("");
+    setPasswordSuccess("");
+    setIsPasswordModalOpen(true);
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    if (!newPassword || !confirmPassword) {
+      setPasswordError("Vui lòng nhập đầy đủ các trường bắt buộc!");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError("Mật khẩu mới phải có ít nhất 6 ký tự!");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Xác nhận mật khẩu không khớp!");
+      return;
+    }
+
+    try {
+      setIsSavingPassword(true);
+      await usersApi.updateUser(passwordUser!.id, {
+        password: newPassword,
+      });
+      setPasswordSuccess("Đổi mật khẩu thành công!");
+      setTimeout(() => {
+        setIsPasswordModalOpen(false);
+      }, 1500);
+    } catch (err: any) {
+      console.error("Lỗi khi đổi mật khẩu user:", err);
+      setPasswordError(err.response?.data?.message || "Có lỗi xảy ra khi đổi mật khẩu.");
+    } finally {
+      setIsSavingPassword(false);
+    }
   };
 
   const filteredUsers = users?.filter(
@@ -493,6 +549,26 @@ const UsersPage: React.FC = () => {
                           <Edit2 size={18} />
                         </button>
                         <button
+                          onClick={() => openChangePasswordModal(user)}
+                          title="Đổi mật khẩu"
+                          style={{
+                            padding: "0.5rem",
+                            backgroundColor: "transparent",
+                            color: "#d97706",
+                            borderRadius: "0.5rem",
+                            transition: "all 0.2s",
+                          }}
+                          onMouseOver={(e) =>
+                            (e.currentTarget.style.backgroundColor = "#fef3c7")
+                          }
+                          onMouseOut={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              "transparent")
+                          }
+                        >
+                          <Key size={18} />
+                        </button>
+                        <button
                           onClick={() =>
                             navigate(`/admin/roles?userId=${user.id}`)
                           }
@@ -559,6 +635,213 @@ const UsersPage: React.FC = () => {
         isLoading={createMutation.isPending || updateMutation.isPending}
         user={selectedUser}
       />
+
+      {/* Modal Đổi mật khẩu */}
+      {isPasswordModalOpen && passwordUser && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            backdropFilter: "blur(4px)",
+            padding: "1rem",
+          }}
+          onClick={() => !isSavingPassword && setIsPasswordModalOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "1rem",
+              width: "100%",
+              maxWidth: "400px",
+              boxShadow:
+                "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+              overflow: "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: "1.5rem",
+                borderBottom: "1px solid var(--border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <h2 style={{ fontSize: "1.25rem", fontWeight: "700" }}>
+                Đổi Mật Khẩu
+              </h2>
+              <button
+                onClick={() => setIsPasswordModalOpen(false)}
+                disabled={isSavingPassword}
+                style={{
+                  padding: "0.5rem",
+                  borderRadius: "0.5rem",
+                  color: "#64748b",
+                  backgroundColor: "transparent",
+                }}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.backgroundColor = "#f1f5f9")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.backgroundColor = "transparent")
+                }
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form onSubmit={handleChangePassword} style={{ padding: "1.5rem" }}>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
+              >
+                <div
+                  style={{
+                    padding: "0.75rem",
+                    backgroundColor: "#f8fafc",
+                    borderRadius: "0.5rem",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    Tài khoản:
+                  </div>
+                  <div style={{ fontWeight: "600", color: "var(--foreground)" }}>
+                    {passwordUser.fullName}
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                    {passwordUser.email}
+                  </div>
+                </div>
+
+                {passwordError && (
+                  <div style={{ color: "#ef4444", fontSize: "0.875rem" }}>
+                    {passwordError}
+                  </div>
+                )}
+                {passwordSuccess && (
+                  <div style={{ color: "#10b981", fontSize: "0.875rem", fontWeight: "500" }}>
+                    {passwordSuccess}
+                  </div>
+                )}
+
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.875rem",
+                      fontWeight: "600",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    Mật khẩu mới *
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    disabled={isSavingPassword}
+                    placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)..."
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid var(--border)",
+                      outline: "none",
+                    }}
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "0.875rem",
+                      fontWeight: "600",
+                      marginBottom: "0.5rem",
+                    }}
+                  >
+                    Xác nhận mật khẩu mới *
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    disabled={isSavingPassword}
+                    placeholder="Xác nhận mật khẩu mới..."
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid var(--border)",
+                      outline: "none",
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div
+                style={{
+                  marginTop: "2rem",
+                  display: "flex",
+                  gap: "1rem",
+                  justifyContent: "flex-end",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsPasswordModalOpen(false)}
+                  disabled={isSavingPassword}
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    borderRadius: "0.75rem",
+                    border: "1px solid var(--border)",
+                    backgroundColor: "white",
+                    fontWeight: "600",
+                  }}
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingPassword}
+                  className="btn-primary"
+                  style={{
+                    padding: "0.75rem 1.5rem",
+                    borderRadius: "0.75rem",
+                    fontWeight: "600",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    opacity: isSavingPassword ? 0.7 : 1,
+                  }}
+                >
+                  {isSavingPassword && (
+                    <span className="animate-spin" style={{ display: "inline-block" }}>
+                      🌀
+                    </span>
+                  )}
+                  Lưu Thay Đổi
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

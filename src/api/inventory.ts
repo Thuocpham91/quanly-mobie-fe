@@ -40,6 +40,7 @@ export interface Product {
   productCode?: string;
   isService?: boolean;
   imageUrl?: string;
+  imageUrls?: string[];
   manufacturer?: string;
   categoryId?: string;
   category?: Category;
@@ -92,6 +93,18 @@ export const getProducts = async (context?: any): Promise<Product[]> => {
   const url = isService !== undefined ? `/products?isService=${isService}` : '/products';
   const response = await client.get<any>(url);
   return response.data?.data || response.data || [];
+};
+
+export const getProductsPaginated = async (page = 1, limit = 10, isService?: boolean) => {
+  const query = new URLSearchParams();
+  query.append('page', String(page));
+  query.append('limit', String(limit));
+  if (isService !== undefined) {
+    query.append('isService', String(isService));
+  }
+  const url = `/products?${query.toString()}`;
+  const response = await client.get<any>(url);
+  return response.data || { data: [], meta: { total: 0, page, limit, totalPages: 1 } };
 };
 
 // Category APIs
@@ -209,10 +222,14 @@ export const getInventorySummary = async (branchId?: string) => {
   return response.data?.data || response.data || [];
 };
 
-export const getInventoryBatches = async (branchId?: string) => {
-  const url = branchId ? `/inventory/batches?branchId=${branchId}` : '/inventory/batches';
+export const getInventoryBatches = async (branchId?: string, page = 1, limit = 10) => {
+  const query = new URLSearchParams();
+  if (branchId) query.append('branchId', branchId);
+  query.append('page', String(page));
+  query.append('limit', String(limit));
+  const url = `/inventory/batches?${query.toString()}`;
   const response = await client.get<any>(url);
-  return response.data?.data || response.data || [];
+  return response.data || { data: [], meta: { total: 0, page, limit, totalPages: 1 } };
 };
 
 export const getInventoryBatch = async (id: string) => {
@@ -236,6 +253,18 @@ export const deleteInventoryBatch = async (id: string) => {
 
 export const bulkCreateInventoryBatches = async (data: Partial<InventoryBatch>[]) => {
   const response = await client.post<InventoryBatch[]>('/inventory/batches/bulk', data);
+  return response.data;
+};
+
+export const processInventoryUpload = async (file: File, branchId?: string) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const url = branchId ? `/inventory/import-legacy?branchId=${branchId}` : '/inventory/import-legacy';
+  const response = await client.post<any>(url, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
   return response.data;
 };
 
@@ -332,6 +361,13 @@ export const cancelTransfer = async (id: string) => {
   return response.data;
 };
 
+export const uploadMultipleFiles = async (files: File[]) => {
+  const formData = new FormData();
+  files.forEach((file) => formData.append('files', file));
+  const response = await client.post<{ message: string; data: { url: string; key: string }[] }>('/files/upload-multiple', formData);
+  return response.data;
+};
+
 export default {
   getProducts,
   createProduct,
@@ -359,6 +395,7 @@ export default {
   updateInventoryBatch,
   deleteInventoryBatch,
   bulkCreateInventoryBatches,
+  processInventoryUpload,
   getProductPrices,
   setProductBranchPrice,
   deleteProductBranchPrice,
@@ -369,4 +406,5 @@ export default {
   getTransfers,
   confirmTransfer,
   cancelTransfer,
+  uploadMultipleFiles,
 };

@@ -45,7 +45,6 @@ const DashboardLayout: React.FC = () => {
   const bottomNavItems = [
     { path: '/admin/pos',            icon: <Wrench size={18} />,          label: 'Giao Việc Kỹ Thuật' },
     { path: '/admin/appointments',   icon: <GraduationCap size={18} />,   label: 'Đào Tạo' },
-    { path: '/admin/service-orders', icon: <Tag size={18} />,             label: 'Báo Giá Dịch Vụ' },
     { path: '/admin/policies',       icon: <AlignLeft size={18} />,       label: 'Nội Quy Chính Sách' },
     { path: '/admin',                icon: <TrendingUp size={18} />,      label: 'Báo Cáo Doanh Số' },
     { path: '/admin/customers',      icon: <FileText size={18} />,        label: 'Báo Cáo Công Nợ' },
@@ -177,7 +176,8 @@ const DashboardLayout: React.FC = () => {
       icon: <ShoppingCart size={18} />,
       items: [
         { path: '/admin/pos',            icon: <ClipboardCheck size={18} />, label: 'Form Kỹ Thuật',      permission: 'sales.create' },
-        { path: '/admin/service-orders', icon: <ClipboardCheck size={18} />, label: 'Đơn hàng dịch vụ',  permission: 'sales.create' },
+        { path: '/admin/sales',          icon: <ShoppingCart size={18} />,   label: 'Bán hàng POS',        permission: 'sales.create' },
+        { path: '/admin/orders',         icon: <ShoppingBag size={18} />,    label: 'Quản lý đơn hàng',    permission: 'sales.create' },
       ]
     },
     {

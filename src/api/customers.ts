@@ -46,6 +46,22 @@ export const topUpWallet = async (id: string, amount: number) => {
   return response.data;
 };
 
+export const bulkCreateCustomers = async (customers: Partial<Customer>[]) => {
+  const response = await client.post<{ success: number; failed: { fullName: string; phone: string; reason: string }[] }>('/customers/bulk', { customers });
+  return response.data;
+};
+
+export const importCustomersExcel = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await client.post<{ success: number; failed: { rowNum: number; fullName: string; phone: string; reason: string }[] }>('/customers/import', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};
+
 export default {
   getCustomers,
   searchCustomers,
@@ -53,4 +69,6 @@ export default {
   updateCustomer,
   deleteCustomer,
   topUpWallet,
+  bulkCreateCustomers,
+  importCustomersExcel,
 };

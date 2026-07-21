@@ -1,13 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Mail, Phone, MapPin, Edit2, Trash2, Eye } from 'lucide-react';
-import { getCustomers, searchCustomers, createCustomer, updateCustomer, deleteCustomer, type Customer } from '../api/customers';
+import { 
+  Plus, 
+  Search, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Edit2, 
+  Trash2, 
+  Eye, 
+  FileSpreadsheet, 
+  Check, 
+  AlertTriangle, 
+  Loader2,
+  X,
+  CheckCircle2,
+  XCircle
+} from 'lucide-react';
+import { getCustomers, searchCustomers, createCustomer, updateCustomer, deleteCustomer, importCustomersExcel, type Customer } from '../api/customers';
 import { type PaginatedResponse } from '../api/client';
 import { useBranchContext } from '../context/BranchContext';
 import Pagination from '../components/Pagination';
 import CustomerModal from '../components/CustomerModal';
 import CustomerDetailsModal from '../components/CustomerDetailsModal';
 import { useTranslation } from 'react-i18next';
+import * as XLSX from 'xlsx';
+
+interface ExcelRow {
+  rowNum: number;
+  fullName: string;
+  phone: string;
+  phoneRaw: string;
+  address: string;
+  email: string;
+  customerType: string;
+  notes: string;
+  isValid: boolean;
+  warning: string;
+}
 
 const CustomersPage: React.FC = () => {
   const { t } = useTranslation();
@@ -20,6 +50,17 @@ const CustomersPage: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>();
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [detailCustomer, setDetailCustomer] = useState<Customer | undefined>();
+
+  // Excel Import states
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [previewRows, setPreviewRows] = useState<ExcelRow[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importResults, setImportResults] = useState<{
+    success: number;
+    failed: { rowNum: number; name: string; phone: string; reason: string }[];
+  } | null>(null);
 
   const { data: paginatedData, isLoading } = useQuery<PaginatedResponse<Customer>>({
     queryKey: ['customers', selectedBranchId, page, searchTerm],
@@ -38,7 +79,6 @@ const CustomersPage: React.FC = () => {
   React.useEffect(() => {
     setPage(1);
   }, [searchTerm, selectedBranchId]);
-
 
   const createMutation = useMutation({
     mutationFn: (data: Partial<Customer>) => {
@@ -98,19 +138,90 @@ const CustomersPage: React.FC = () => {
     }
   };
 
+  // Excel upload and server-side import handler
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImportModalOpen(true);
+    setIsImporting(true);
+    setImportResults(null);
+    setPreviewRows([]);
+
+    try {
+      const response = await importCustomersExcel(file);
+      const success = response.success;
+      const failed = response.failed.map(f => ({
+        rowNum: f.rowNum,
+        name: f.fullName || 'N/A',
+        phone: f.phone || 'N/A',
+        reason: f.reason
+      }));
+
+      setImportResults({ success, failed });
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err.response?.data?.message || 'Có lỗi xảy ra khi gửi tệp Excel lên server.';
+      alert(Array.isArray(errMsg) ? errMsg.join('; ') : errMsg);
+      setIsImportModalOpen(false);
+    } finally {
+      setIsImporting(false);
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      e.target.value = '';
+    }
+  };
+
+  const totalValid = previewRows.filter(r => r.isValid).length;
+  const totalInvalid = previewRows.length - totalValid;
+
   return (
     <div>
+      {/* Header section with buttons */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
           <h1 style={{ fontSize: '1.875rem', marginBottom: '0.25rem' }}>{t('customers.title')}</h1>
           <p style={{ color: '#64748b' }}>{t('customers.subtitle')}</p>
         </div>
-        <button className="btn-primary" onClick={handleAdd} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Plus size={18} />
-          {t('customers.add_new')}
-        </button>
+        
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          {/* Hidden File Input */}
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            accept=".xlsx, .xls" 
+            onChange={handleImportExcel} 
+            style={{ display: 'none' }} 
+          />
+          <button 
+            onClick={() => fileInputRef.current?.click()} 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.5rem', 
+              backgroundColor: '#f1f5f9',
+              border: '1px solid #cbd5e1',
+              color: '#334155',
+              cursor: 'pointer',
+              padding: '0.5rem 1.1rem',
+              borderRadius: 'var(--radius)',
+              fontWeight: '600',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+          >
+            <FileSpreadsheet size={18} color="#10b981" />
+            Nhập từ Excel
+          </button>
+
+          <button className="btn-primary" onClick={handleAdd} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Plus size={18} />
+            {t('customers.add_new')}
+          </button>
+        </div>
       </div>
 
+      {/* Main Customers table card */}
       <div className="card" style={{ padding: '0' }}>
         <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', gap: '1rem' }}>
           <div style={{ position: 'relative', flex: 1 }}>
@@ -135,24 +246,32 @@ const CustomersPage: React.FC = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
               <tr>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Mã KH</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>{t('customers.table_name')}</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>{t('customers.table_contact')}</th>
-                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>{t('customers.table_address')}</th>
-                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>{t('customers.table_created')}</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Người tạo</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem', textAlign: 'right' }}>Tổng bán</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem', textAlign: 'right' }}>Nợ cần thu hiện tại</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem', textAlign: 'right' }}>Tổng bán trừ trả hàng</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem', textAlign: 'right' }}>{t('customers.table_actions')}</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('customers.fetching')}</td>
+                  <td colSpan={8} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('customers.fetching')}</td>
                 </tr>
               ) : customers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('customers.no_customers')}</td>
+                  <td colSpan={8} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('customers.no_customers')}</td>
                 </tr>
-              ) : customers.map((customer: Customer) => (
+              ) : customers.map((customer: any) => (
                 <tr key={customer.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background-color 0.2s' }}>
+                  {/* Mã KH */}
+                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: '600', color: '#475569' }}>
+                    {customer.code || 'N/A'}
+                  </td>
+                  {/* Tên */}
                   <td style={{ padding: '1rem 1.5rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <div 
@@ -171,37 +290,46 @@ const CustomersPage: React.FC = () => {
                                          customer.customerType === 'Đại lý' ? '#e0f2fe' : 
                                          customer.customerType === 'Đối tác' ? '#f3e8ff' : '#f1f5f9',
                         color: customer.customerType === 'Khách VIP' ? '#d97706' : 
-                               customer.customerType === 'Khách sỉ' ? '#166534' : 
-                               customer.customerType === 'Đại lý' ? '#0369a1' : 
-                               customer.customerType === 'Đối tác' ? '#6b21a8' : '#475569'
+                                customer.customerType === 'Khách sỉ' ? '#166534' : 
+                                customer.customerType === 'Đại lý' ? '#0369a1' : 
+                                customer.customerType === 'Đối tác' ? '#6b21a8' : '#475569'
                       }}>
                         {customer.customerType || 'Khách lẻ'}
                       </span>
                     </div>
                   </td>
+                  {/* Liên hệ */}
                   <td style={{ padding: '1rem 1.5rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
                         <Phone size={14} color="#64748b" />
-                        {customer.phone}
+                        {customer.phone || 'N/A'}
                       </div>
-                      {customer.email && (
+                      {customer.address && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#64748b' }}>
-                          <Mail size={14} />
-                          {customer.email}
+                          <MapPin size={14} />
+                          {customer.address}
                         </div>
                       )}
                     </div>
                   </td>
-                  <td style={{ padding: '1rem 1.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#64748b' }}>
-                      <MapPin size={14} />
-                      {customer.address || 'N/A'}
-                    </div>
-                  </td>
+                  {/* Người tạo */}
                   <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: '#64748b' }}>
-                    {new Date(customer.createdAt).toLocaleDateString()}
+                    {customer.creator || 'N/A'}
                   </td>
+                  {/* Tổng bán */}
+                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: '600', color: '#1e293b', textAlign: 'right' }}>
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(customer.totalSales || 0))}
+                  </td>
+                  {/* Nợ cần thu */}
+                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: '600', color: Number(customer.currentDebt || 0) > 0 ? '#ef4444' : '#1e293b', textAlign: 'right' }}>
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(customer.currentDebt || 0))}
+                  </td>
+                  {/* Tổng bán trừ trả */}
+                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: '600', color: '#059669', textAlign: 'right' }}>
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(customer.totalSalesMinusReturns || 0))}
+                  </td>
+                  {/* Actions */}
                   <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
                       <button onClick={() => handleViewDetails(customer)} title="Xem chi tiết" style={{ padding: '0.4rem', backgroundColor: 'transparent', color: '#6366f1', cursor: 'pointer', border: 'none' }}>
@@ -230,6 +358,7 @@ const CustomersPage: React.FC = () => {
         )}
       </div>
 
+      {/* Customer Modals */}
       <CustomerModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -244,6 +373,196 @@ const CustomersPage: React.FC = () => {
           customer={detailCustomer}
         />
       )}
+
+      {/* EXCEL IMPORT PREVIEW & REPORT MODAL */}
+      {isImportModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1100,
+          padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '0.75rem',
+            width: '100%',
+            maxWidth: '850px',
+            maxHeight: '90vh',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '1.25rem',
+              borderBottom: '1px solid #e2e8f0',
+              backgroundColor: '#f8fafc',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#1e293b', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <FileSpreadsheet size={20} color="#10b981" />
+                  Xem trước dữ liệu nhập từ Excel
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
+                  Kiểm tra tính hợp lệ trước khi đẩy dữ liệu vào hệ thống.
+                </p>
+              </div>
+              <button 
+                onClick={() => !isImporting && setIsImportModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: isImporting ? 'not-allowed' : 'pointer', color: '#94a3b8' }}
+                disabled={isImporting}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1 }}>
+              
+              {/* Progress and status indicators */}
+              {!importResults && (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#f1f5f9',
+                  padding: '0.75rem 1rem',
+                  borderRadius: '0.5rem',
+                  fontSize: '0.85rem',
+                  fontWeight: '600'
+                }}>
+                  <span style={{ color: '#334155' }}>Dòng tìm thấy: {previewRows.length}</span>
+                  <span style={{ color: '#059669' }}>Hợp lệ để tải lên: {totalValid}</span>
+                  {totalInvalid > 0 && <span style={{ color: '#ef4444' }}>Cảnh báo/Lỗi: {totalInvalid}</span>}
+                </div>
+              )}
+
+              {/* Progress bar inside the import modal */}
+              {isImporting && (
+                <div style={{
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '0.5rem',
+                  padding: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: '700', color: '#1e293b' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <Loader2 size={16} className="animate-spin" color="#6366f1" />
+                      Đang gửi và xử lý dữ liệu import trên máy chủ...
+                    </span>
+                  </div>
+                  <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{
+                      width: '100%',
+                      height: '100%',
+                      backgroundColor: '#6366f1',
+                    }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Final Import Results Summary */}
+              {importResults && (
+                <div style={{
+                  backgroundColor: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  borderRadius: '0.5rem',
+                  padding: '1rem',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem',
+                  color: '#166534'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: '800', fontSize: '0.95rem' }}>
+                    <CheckCircle2 size={20} color="#166534" />
+                    Quá trình Import tệp Excel đã hoàn tất!
+                  </div>
+                  <div style={{ fontSize: '0.875rem' }}>
+                    Thành công: <strong>{importResults.success}</strong> khách hàng đã được đưa vào hệ thống.
+                    {importResults.failed.length > 0 && (
+                      <span style={{ color: '#b91c1c', marginLeft: '0.5rem' }}>
+                        Thất bại: <strong>{importResults.failed.length}</strong> dòng (Xem chi tiết lỗi phía dưới).
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Preview Rows Table or Failure report list */}
+              {importResults && importResults.failed.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: '750', color: '#b91c1c' }}>
+                    Danh sách các dòng tải lên thất bại:
+                  </div>
+                  <div style={{ border: '1px solid #fca5a5', borderRadius: '0.5rem', overflow: 'hidden', maxHeight: '250px', overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8rem' }}>
+                      <thead style={{ backgroundColor: '#fee2e2', borderBottom: '1px solid #fca5a5' }}>
+                        <tr>
+                          <th style={{ padding: '0.5rem 1rem', width: '80px', color: '#991b1b' }}>Dòng Excel</th>
+                          <th style={{ padding: '0.5rem 1rem', color: '#991b1b' }}>Họ tên</th>
+                          <th style={{ padding: '0.5rem 1rem', color: '#991b1b' }}>Số điện thoại</th>
+                          <th style={{ padding: '0.5rem 1rem', color: '#991b1b' }}>Nguyên nhân lỗi</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importResults.failed.map((f, idx) => (
+                          <tr key={idx} style={{ borderBottom: idx === importResults.failed.length - 1 ? 'none' : '1px solid #fee2e2' }}>
+                            <td style={{ padding: '0.5rem 1rem', fontWeight: '700', color: '#991b1b' }}>{f.rowNum}</td>
+                            <td style={{ padding: '0.5rem 1rem', color: '#1e293b' }}>{f.name}</td>
+                            <td style={{ padding: '0.5rem 1rem', color: '#1e293b' }}>{f.phone}</td>
+                            <td style={{ padding: '0.5rem 1rem', color: '#b91c1c', fontWeight: '600' }}>{f.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : null}
+
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '1.25rem',
+              backgroundColor: '#f8fafc',
+              borderTop: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '0.75rem'
+            }}>
+              <button
+                onClick={() => setIsImportModalOpen(false)}
+                disabled={isImporting}
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  backgroundColor: 'white',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '0.375rem',
+                  color: '#475569',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  cursor: isImporting ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {importResults ? 'Đóng' : 'Hủy bỏ'}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

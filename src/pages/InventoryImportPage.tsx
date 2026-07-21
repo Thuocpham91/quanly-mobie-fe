@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
@@ -9,7 +9,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { 
   getProducts, bulkCreateInventoryBatches, getUnits, createProduct, 
-  getInventoryBatch, updateInventoryBatch, type Product
+  getInventoryBatch, updateInventoryBatch, processInventoryUpload, type Product
 } from '../api/inventory';
 import { getDistributors } from '../api/distributors';
 import { getUsers } from '../api/users';
@@ -35,6 +35,23 @@ interface ImportItem {
   quantityBoxes?: number; // kept for legacy compat if needed
   packagingUnitId?: string; // kept for legacy compat if needed
 }
+
+const normalizeHeader = (value: unknown) => {
+  if (value === undefined || value === null) return '';
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9]/g, '');
+};
+
+const getNumberValue = (value: unknown) => {
+  if (value === undefined || value === null) return 0;
+  const text = String(value).replace(/\s+/g, '').replace(/,/g, '.').replace(/[^0-9.\-]/g, '');
+  const parsed = parseFloat(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 const InventoryImportPage: React.FC = () => {
   const { t } = useTranslation();
@@ -110,6 +127,10 @@ const InventoryImportPage: React.FC = () => {
     }
   }, [editingBatch, editId]);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isProcessingUpload, setIsProcessingUpload] = useState(false);
+  const [uploadResult, setUploadResult] = useState<any>(null);
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  const importFileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -282,19 +303,25 @@ const InventoryImportPage: React.FC = () => {
   const downloadSampleExcel = () => {
     const sampleData = [
       {
-        'Mã hàng (Barcode/Code)': '893000111222',
-        'Tên mặt hàng (Tham khảo)': 'Vắc xin dại',
+        'STT': 1,
+        'Mã hàng': '893000111222',
+        'Tên hàng': 'Vắc xin dại',
+        'Đơn vị tính': 'Chai',
         'Số lượng': 10,
+        'Đơn giá': 50000,
         'Thành tiền': 500000,
-        'Hạn sử dụng (YYYY-MM-DD)': '2026-12-31',
+        'Hạn sử dụng': '2026-12-31',
         'Hàng tặng (1: Có, 0: Không)': 0
       },
       {
-        'Mã hàng (Barcode/Code)': 'SP002',
-        'Tên mặt hàng (Tham khảo)': 'Thức ăn mèo',
+        'STT': 2,
+        'Mã hàng': 'SP002',
+        'Tên hàng': 'Thức ăn mèo',
+        'Đơn vị tính': 'Gói',
         'Số lượng': 5,
+        'Đơn giá': 120000,
         'Thành tiền': 600000,
-        'Hạn sử dụng (YYYY-MM-DD)': '',
+        'Hạn sử dụng': '',
         'Hàng tặng (1: Có, 0: Không)': 0
       }
     ];
@@ -305,55 +332,49 @@ const InventoryImportPage: React.FC = () => {
     XLSX.writeFile(wb, 'mau_nhap_kho.xlsx');
   };
 
-  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!selectedBranchId) {
+      alert('Vui lòng chọn chi nhánh trước khi import.');
+      e.target.value = '';
+      return;
+    }
 
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const bstr = evt.target?.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const ws = wb.Sheets[wsname];
-      const data = XLSX.utils.sheet_to_json(ws);
+    setIsProcessingUpload(true);
+    setUploadResult(null);
+    setUploadErrors([]);
 
-      const newItems: ImportItem[] = [];
-      const missingProducts: string[] = [];
+    try {
+    const response = await processInventoryUpload(file, selectedBranchId);
+      setUploadResult(response);
 
-      data.forEach((row: any) => {
-        const code = String(row['Mã hàng (Barcode/Code)'] || '').trim();
-        const quantity = parseFloat(row['Số lượng']) || 0;
-        const price = parseFloat(row['Thành tiền'] || row['Đơn giá']) || 0;
-        const expiry = String(row['Hạn sử dụng (YYYY-MM-DD)'] || '').trim();
-        const isGift = row['Hàng tặng (1: Có, 0: Không)'] == 1;
-
-        const product = products.find((p: Product) => p.barcode === code || p.productCode === code);
-        
-        if (product) {
-          newItems.push({
-            id: Math.random().toString(36).substr(2, 9),
-            product,
-            unitQuantities: { [product.unitId || 'default']: quantity },
-            quantityPieces: quantity,
-            baseUnitId: product.unitId || '',
-            costPrice: price,
-            priceType: 'base',
-            expiryDate: expiry,
-            isGift
-          });
-        } else if (code) {
-          missingProducts.push(code);
-        }
+      const success = response?.imported ?? response?.success ?? 0;
+      const failed = response?.errors ?? response?.failed ?? [];
+      const errorMessages = failed.map((item: any, index: number) => {
+        const rowLabel = item.row ? `Dòng ${item.row}` : item.rowNum ? `Dòng ${item.rowNum}` : `#${index + 1}`;
+        return `${rowLabel}: ${item.reason || 'Lỗi không xác định'}`;
       });
+      setUploadErrors(errorMessages.slice(0, 10));
 
-      if (missingProducts.length > 0) {
-        alert(`Không tìm thấy ${missingProducts.length} sản phẩm với mã: ${missingProducts.join(', ')}. Vui lòng kiểm tra lại danh mục sản phẩm.`);
+      if (success > 0) {
+        alert(`Upload thành công ${success} bản ghi.`);
+      }
+      if (failed.length > 0) {
+        const failureMsg = errorMessages.slice(0, 5).join('\n');
+        alert(`Một số dòng không được xử lý:\n${failureMsg}`);
       }
 
-      setItems([...items, ...newItems]);
+      queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err.response?.data?.message || err.message || 'Có lỗi xảy ra khi upload tệp.';
+      alert(errMsg);
+    } finally {
+      setIsProcessingUpload(false);
       e.target.value = '';
-    };
-    reader.readAsBinaryString(file);
+    }
   };
 
   const filteredProducts = products.filter((p: Product) => 
@@ -407,6 +428,7 @@ const InventoryImportPage: React.FC = () => {
             accept=".xlsx, .xls" 
             style={{ display: 'none' }} 
             onChange={handleImportExcel}
+            ref={importFileRef}
           />
           <button 
             className="btn-secondary" 
@@ -419,12 +441,13 @@ const InventoryImportPage: React.FC = () => {
           </button>
           <button 
             className="btn-secondary" 
-            onClick={() => document.getElementById('excel-upload')?.click()}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', flex: isMobile ? 1 : 'none' }}
+            onClick={() => importFileRef.current?.click()}
+            disabled={isProcessingUpload}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', flex: isMobile ? 1 : 'none', opacity: isProcessingUpload ? 0.6 : 1, cursor: isProcessingUpload ? 'not-allowed' : 'pointer' }}
           >
             <FileSpreadsheet size={18} />
-            {!isMobile && (t('inventory.import_excel') || 'Nhập excel')}
-            {isMobile && 'Import'}
+            {!isMobile && (isProcessingUpload ? 'Đang upload...' : (t('inventory.import_excel') || 'Nhập excel'))}
+            {isMobile && (isProcessingUpload ? 'Đang...' : 'Import')}
           </button>
           <button 
             className="btn-primary" 
@@ -439,6 +462,15 @@ const InventoryImportPage: React.FC = () => {
       </div>
 
       {/* Main Info Card */}
+      {uploadErrors.length > 0 && (
+        <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '1rem', border: '1px solid #fca5a5', backgroundColor: '#fef2f2' }}>
+          <div style={{ fontWeight: '700', color: '#b91c1c', marginBottom: '0.5rem' }}>Một số dòng không hợp lệ:</div>
+          <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#991b1b', display: 'grid', gap: '0.35rem' }}>
+            {uploadErrors.map((message, index) => <li key={`${message}-${index}`}>{message}</li>)}
+          </ul>
+        </div>
+      )}
+
       <div className="card" style={{ padding: '1.5rem', marginBottom: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)', gap: '1.25rem' }}>
           

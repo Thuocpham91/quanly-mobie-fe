@@ -51,7 +51,7 @@
     "rights": "Bảo lưu mọi quyền."
   },
   "login": {
-    "welcome": "Chào mừng đến với PetCare",
+    "welcome": "Chào mừng đến với Mobie",
     "subtitle": "Vui lòng đăng nhập vào tài khoản của bạn",
     "email": "Địa chỉ Email",
     "password": "Mật khẩu",
@@ -305,7 +305,10 @@
     "chart_profit": "Lợi nhuận",
     "appointments_title": "Lịch hẹn ({{total}})",
     "top_products_title": "Sản phẩm bán chạy",
-    "top_products_subtitle": "Top 5 trong kỳ",
+    "top_products_subtitle": "Top 20 trong kỳ",
+    "top_products_count": "{{count}} mặt hàng",
+    "search_products_placeholder": "Tìm kiếm sản phẩm bán chạy...",
+    "no_matching_products": "Không tìm thấy sản phẩm phù hợp.",
     "low_stock_title": "Cảnh báo sắp hết hàng",
     "low_stock_badge": "{{count}} mặt hàng",
     "table_no": "#",

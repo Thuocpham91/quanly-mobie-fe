@@ -188,6 +188,7 @@ const DashboardHome: React.FC = () => {
   const [data,      setData]      = useState<DashboardStatisticsResponse | null>(null);
   const [loading,   setLoading]   = useState(true);
   const [refreshing,setRefreshing]= useState(false);
+  const [topProductSearch, setTopProductSearch] = useState('');
 
   const fetchData = async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
@@ -211,6 +212,10 @@ const DashboardHome: React.FC = () => {
     { label: t("dashboard.total_orders"),   value: data.totals.orders,    isCurrency: false, icon: <Activity size={20} />,    gradient: GRADIENTS.orders },
     { label: t("dashboard.customers"), value: data.totals.customers, isCurrency: false, icon: <Users size={20} />,       gradient: GRADIENTS.customers },
   ] : [];
+
+  const filteredTopProducts = data?.topProducts?.filter((p) =>
+    p.name.toLowerCase().includes(topProductSearch.toLowerCase())
+  ) ?? [];
 
   return (
     <div style={{ fontFamily: "\"Inter\", system-ui, sans-serif" }}>
@@ -339,9 +344,23 @@ const DashboardHome: React.FC = () => {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "1rem" }}>
         {/* Top Products */}
         <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: "1rem", overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.06)", animation: "fadeUp 0.5s ease 0.4s both" }}>
-          <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <SectionHeader icon={<TrendingUp size={16} />} title={t("dashboard.top_products_title")} iconColor="#10b981" subtitle={t("dashboard.top_products_subtitle")} />
-            <ChevronRight size={16} color="#94a3b8" />
+          <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
+            <div style={{ flex: "1 1 100%", minWidth: 0 }}>
+              <SectionHeader icon={<TrendingUp size={16} />} title={t("dashboard.top_products_title")} iconColor="#10b981" subtitle={t("dashboard.top_products_subtitle")} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", width: "100%", maxWidth: "420px" }}>
+              <input
+                type="text"
+                value={topProductSearch}
+                onChange={(e) => setTopProductSearch(e.target.value)}
+                placeholder={t("dashboard.search_products_placeholder")}
+                className="dash-input"
+                style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: "0.75rem", border: "1px solid var(--border)", background: "var(--background)", color: "var(--foreground)" }}
+              />
+              <span style={{ color: "#64748b", fontSize: "0.85rem", whiteSpace: "nowrap" }}>
+                {t("dashboard.top_products_count", { count: filteredTopProducts.length })}
+              </span>
+            </div>
           </div>
           {loading ? (
             <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
@@ -357,7 +376,7 @@ const DashboardHome: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {data?.topProducts?.length ? data.topProducts.map((p, idx) => (
+                {filteredTopProducts.length ? filteredTopProducts.map((p, idx) => (
                   <tr key={idx} className="dash-row" style={{ borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}>
                     <td style={{ padding: "0.875rem 1.25rem" }}>
                       <span style={{
@@ -374,7 +393,9 @@ const DashboardHome: React.FC = () => {
                     <td style={{ padding: "0.875rem 1.25rem", textAlign: "right", fontSize: "0.875rem", fontWeight: "700", color: "#6366f1" }}>{formatShort(p.revenue)}</td>
                   </tr>
                 )) : (
-                  <tr><td colSpan={4} style={{ padding: "3rem", textAlign: "center", color: "#94a3b8", fontSize: "0.875rem" }}>{t("dashboard.empty_sales")}</td></tr>
+                  <tr><td colSpan={4} style={{ padding: "3rem", textAlign: "center", color: "#94a3b8", fontSize: "0.875rem" }}>
+                    {topProductSearch ? t("dashboard.no_matching_products") : t("dashboard.empty_sales")}
+                  </td></tr>
                 )}
               </tbody>
             </table>

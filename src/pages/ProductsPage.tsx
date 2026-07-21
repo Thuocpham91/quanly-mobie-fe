@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Plus, Edit2, Trash2, Box, Layers, Tag, Ruler } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { type PaginatedResponse } from '../api/client';
 import { 
-  getProducts, deleteProduct, type Product,
+  getProductsPaginated, deleteProduct, type Product,
   createProduct, updateProduct,
   getCategories, deleteCategory,
   getUnits, deleteUnit,
   getItemGroups, deleteItemGroup,
   getInventorySummary
 } from '../api/inventory';
+import Pagination from '../components/Pagination';
 import ProductModal from '../components/ProductModal';
 import { useBranchContext } from '../context/BranchContext';
 
@@ -18,16 +20,20 @@ const ProductsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'units' | 'groups'>('products');
+  const [page, setPage] = useState(1);
+  const [limit] = useState(10);
 
   // Modals state
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | undefined>();
 
   // Fetch Data
-  const { data: products = [], isLoading: loadingProducts } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => getProducts(),
+  const { data: paginatedProducts, isLoading: loadingProducts } = useQuery<PaginatedResponse<Product>>({
+    queryKey: ['products', page],
+    queryFn: () => getProductsPaginated(page, limit),
   });
+  const products = paginatedProducts?.data || [];
+  const productsMeta = paginatedProducts?.meta;
 
   const { data: categories = [] } = useQuery({ queryKey: ['categories'], queryFn: getCategories });
   const { data: units = [] } = useQuery({ queryKey: ['units'], queryFn: getUnits });
@@ -71,7 +77,11 @@ const ProductsPage: React.FC = () => {
       return Promise.reject();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [activeTab === 'groups' ? 'itemGroups' : activeTab] });
+      if (activeTab === 'products') {
+        queryClient.invalidateQueries({ queryKey: ['products', page] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: [activeTab === 'groups' ? 'itemGroups' : activeTab] });
+      }
     }
   });
 
@@ -246,6 +256,17 @@ const ProductsPage: React.FC = () => {
           </tbody>
         </table>
       </div>
+
+      {filteredProducts.length === 0 && !loadingProducts ? null : null}
+
+      {productsMeta && productsMeta.totalPages > 1 && (
+        <Pagination
+          currentPage={productsMeta.page}
+          totalPages={productsMeta.totalPages}
+          totalItems={productsMeta.total}
+          onPageChange={(nextPage) => setPage(nextPage)}
+        />
+      )}
 
       {isProductModalOpen && (
         <ProductModal 
