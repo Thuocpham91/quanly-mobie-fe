@@ -371,9 +371,9 @@ const SalesPage: React.FC = () => {
             </div>
           ) : (
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-              gap: '1rem'
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem'
             }}>
               {displayedProducts.map((item: any) => {
                 const p = item.product;
@@ -391,105 +391,148 @@ const SalesPage: React.FC = () => {
                       backgroundColor: 'white',
                       borderRadius: '0.75rem',
                       border: '1px solid #e2e8f0',
-                      padding: '1rem',
+                      padding: '0.75rem 1rem',
                       display: 'flex',
-                      flexDirection: 'column',
-                      gap: '0.5rem',
+                      alignItems: 'center',
+                      gap: '1rem',
                       cursor: isOutOfStock ? 'not-allowed' : 'pointer',
-                      opacity: isOutOfStock ? 0.6 : 1,
-                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      opacity: isOutOfStock ? 0.65 : 1,
+                      transition: 'transform 0.15s, box-shadow 0.15s, border-color 0.15s',
                       position: 'relative',
                       userSelect: 'none'
                     }}
                     onMouseEnter={(e) => {
                       if (!isOutOfStock) {
-                        e.currentTarget.style.transform = 'translateY(-4px)';
-                        e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0,0,0,0.1)';
+                        e.currentTarget.style.transform = 'translateX(4px)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.05)';
+                        e.currentTarget.style.borderColor = '#cbd5e1';
+                        const addBtn = e.currentTarget.querySelector('.add-btn') as HTMLElement;
+                        if (addBtn) {
+                          addBtn.style.backgroundColor = '#6366f1';
+                          addBtn.style.color = '#ffffff';
+                        }
                       }
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.transform = 'translateX(0)';
                       e.currentTarget.style.boxShadow = 'none';
+                      e.currentTarget.style.borderColor = '#e2e8f0';
+                      const addBtn = e.currentTarget.querySelector('.add-btn') as HTMLElement;
+                      if (addBtn) {
+                        addBtn.style.backgroundColor = '#e0e7ff';
+                        addBtn.style.color = '#6366f1';
+                      }
                     }}
                   >
-                    {/* Thumbnail representation */}
+                    {/* Image / Icon container */}
                     <div style={{
-                      height: '100px',
+                      width: '50px',
+                      height: '50px',
                       backgroundColor: '#f8fafc',
                       borderRadius: '0.5rem',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       color: '#94a3b8',
-                      marginBottom: '0.25rem',
-                      border: '1px dashed #e2e8f0'
+                      border: '1px solid #e2e8f0',
+                      flexShrink: 0,
+                      overflow: 'hidden'
                     }}>
-                      <Package size={36} />
+                      {p.imageUrl ? (
+                        <img 
+                          src={p.imageUrl} 
+                          alt={p.name} 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        />
+                      ) : (
+                        <Package size={24} />
+                      )}
                     </div>
 
-                    {/* Top Seller badge */}
-                    {isTopSeller && (
-                      <div style={{
-                        position: 'absolute',
-                        top: '0.5rem',
-                        left: '0.5rem',
-                        fontSize: '0.65rem',
-                        fontWeight: '700',
-                        padding: '0.2rem 0.5rem',
-                        borderRadius: '2rem',
-                        backgroundColor: '#fef2f2',
-                        color: '#ef4444',
-                        border: '1px solid #fee2e2',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                      }}>
-                        🔥 Bán chạy #{sellerRank}
+                    {/* Product Metadata & Info */}
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, gap: '0.25rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span style={{ 
+                          fontSize: '0.725rem', 
+                          color: '#64748b', 
+                          fontWeight: '600',
+                          backgroundColor: '#f1f5f9',
+                          padding: '0.1rem 0.4rem',
+                          borderRadius: '0.25rem'
+                        }}>
+                          {p.productCode || 'Chưa có mã'}
+                        </span>
+                        
+                        {isTopSeller && (
+                          <span style={{
+                            fontSize: '0.65rem',
+                            fontWeight: '700',
+                            padding: '0.1rem 0.4rem',
+                            borderRadius: '0.25rem',
+                            backgroundColor: '#fef2f2',
+                            color: '#ef4444',
+                            border: '1px solid #fee2e2',
+                          }}>
+                            🔥 Bán chạy #{sellerRank}
+                          </span>
+                        )}
+
+                        <span style={{
+                          fontSize: '0.68rem',
+                          fontWeight: '700',
+                          padding: '0.1rem 0.4rem',
+                          borderRadius: '0.25rem',
+                          backgroundColor: isOutOfStock ? 'rgba(239, 68, 68, 0.1)' : (stock < 5 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)'),
+                          color: isOutOfStock ? '#ef4444' : (stock < 5 ? '#d97706' : '#059669')
+                        }}>
+                          {isOutOfStock ? 'Hết hàng' : `Tồn kho: ${stock}`}
+                        </span>
                       </div>
-                    )}
 
-                    {/* Stock badge */}
-                    <div style={{
-                      position: 'absolute',
-                      top: '0.5rem',
-                      right: '0.5rem',
-                      fontSize: '0.7rem',
-                      fontWeight: '700',
-                      padding: '0.2rem 0.5rem',
-                      borderRadius: '2rem',
-                      backgroundColor: isOutOfStock ? 'rgba(239, 68, 68, 0.1)' : (stock < 5 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)'),
-                      color: isOutOfStock ? '#ef4444' : (stock < 5 ? '#d97706' : '#059669')
-                    }}>
-                      {isOutOfStock ? 'Hết hàng' : `Tồn: ${stock}`}
-                    </div>
-
-                    {/* Product Metadata */}
-                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                      <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '500' }}>
-                        {p.productCode || 'Chưa có mã'}
-                      </span>
                       <h4 style={{
-                        fontSize: '0.9rem',
+                        fontSize: '0.95rem',
                         fontWeight: '700',
                         color: '#1e293b',
-                        margin: '0.15rem 0 0.4rem 0',
-                        lineHeight: '1.3',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
+                        margin: 0,
+                        lineHeight: '1.25',
+                        whiteSpace: 'nowrap',
                         overflow: 'hidden',
-                        height: '2.4rem'
+                        textOverflow: 'ellipsis'
                       }} title={p.name}>
                         {p.name}
                       </h4>
                     </div>
 
-                    {/* Price Tag */}
-                    <div style={{
-                      fontSize: '0.95rem',
-                      fontWeight: '750',
-                      color: '#6366f1',
-                      marginTop: 'auto'
+                    {/* Price and Add CTA */}
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '1rem',
+                      flexShrink: 0 
                     }}>
-                      {formatCurrency(price)}
+                      <div style={{
+                        fontSize: '1.05rem',
+                        fontWeight: '800',
+                        color: '#6366f1',
+                      }}>
+                        {formatCurrency(price)}
+                      </div>
+
+                      <div style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        backgroundColor: isOutOfStock ? '#f1f5f9' : '#e0e7ff',
+                        color: isOutOfStock ? '#94a3b8' : '#6366f1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                      }}
+                      className="add-btn"
+                      >
+                        <Plus size={16} strokeWidth={3} />
+                      </div>
                     </div>
                   </div>
                 );

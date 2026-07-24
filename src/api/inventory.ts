@@ -86,6 +86,36 @@ export interface InventorySummary {
   averageCost: number;
 }
 
+export interface ImportOrderItem {
+  productId: string;
+  importedQuantity: number;
+  costPrice?: number;
+  expiryDate?: string;
+  isGift?: boolean;
+}
+
+export interface ImportOrder {
+  id: string;
+  code: string;
+  branchId: string;
+  distributorId?: string;
+  distributor?: { id: string; name: string };
+  invoiceName?: string;
+  personnelName?: string;
+  importDate?: string;
+  note?: string;
+  taxAmount: number;
+  discountAmount: number;
+  shippingFee: number;
+  totalAmount: number;
+  status: 'DRAFT' | 'COMPLETED' | 'CANCELLED';
+  createdById?: string;
+  createdBy?: { id: string; fullName: string };
+  batches: InventoryBatch[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Product APIs
 export const getProducts = async (context?: any): Promise<Product[]> => {
   // React Query passes a context object; extract isService if provided
@@ -368,6 +398,47 @@ export const uploadMultipleFiles = async (files: File[]) => {
   return response.data;
 };
 
+// Import Order APIs
+export const getImportOrders = async (branchId?: string, page = 1, limit = 10) => {
+  const query = new URLSearchParams();
+  if (branchId) query.append('branchId', branchId);
+  query.append('page', String(page));
+  query.append('limit', String(limit));
+  const response = await client.get<any>(`/inventory/import-orders?${query.toString()}`);
+  return response.data || { data: [], meta: { total: 0, page, limit, totalPages: 1 } };
+};
+
+export const getImportOrder = async (id: string): Promise<ImportOrder> => {
+  const response = await client.get<any>(`/inventory/import-orders/${id}`);
+  return response.data?.data || response.data;
+};
+
+export const createImportOrder = async (data: {
+  branchId: string;
+  distributorId?: string;
+  invoiceName?: string;
+  personnelName?: string;
+  importDate?: string;
+  note?: string;
+  taxAmount?: number;
+  discountAmount?: number;
+  shippingFee?: number;
+  totalAmount?: number;
+  items: ImportOrderItem[];
+}): Promise<ImportOrder> => {
+  const response = await client.post<ImportOrder>('/inventory/import-orders', data);
+  return response.data;
+};
+
+export const updateImportOrder = async (id: string, data: Partial<ImportOrder>): Promise<ImportOrder> => {
+  const response = await client.patch<ImportOrder>(`/inventory/import-orders/${id}`, data);
+  return response.data;
+};
+
+export const deleteImportOrder = async (id: string): Promise<void> => {
+  await client.delete(`/inventory/import-orders/${id}`);
+};
+
 export default {
   getProducts,
   createProduct,
@@ -407,4 +478,9 @@ export default {
   confirmTransfer,
   cancelTransfer,
   uploadMultipleFiles,
+  getImportOrders,
+  getImportOrder,
+  createImportOrder,
+  updateImportOrder,
+  deleteImportOrder,
 };

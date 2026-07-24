@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, FileDown, Edit2, Trash2, FileSpreadsheet } from 'lucide-react';
+import {
+  Search, Plus, FileDown, Trash2, FileSpreadsheet,
+  ChevronRight, Package, Calendar, Building2, User, Receipt
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import Pagination from '../components/Pagination';
-import { 
-  getInventoryBatches, 
-  deleteInventoryBatch,
-  type Product, type InventoryBatch
+import {
+  getImportOrders, deleteImportOrder, processInventoryUpload,
+  type ImportOrder
 } from '../api/inventory';
 import { useBranchContext } from '../context/BranchContext';
-import { processInventoryUpload } from '../api/inventory';
 import * as XLSX from 'xlsx';
 
 const InventoryPage: React.FC = () => {
@@ -20,31 +21,23 @@ const InventoryPage: React.FC = () => {
   const { selectedBranchId } = useBranchContext();
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterDistributorId, setFilterDistributorId] = useState('');
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
 
-  // Modals state (none)
-
   // Fetch Data
-  const { data: paginatedBatches, isLoading: isLoadingBatches } = useQuery({
-    queryKey: ['inventoryBatches', selectedBranchId, page, limit],
-    queryFn: () => getInventoryBatches(selectedBranchId!, page, limit),
+  const { data: paginatedOrders, isLoading } = useQuery({
+    queryKey: ['importOrders', selectedBranchId, page, limit],
+    queryFn: () => getImportOrders(selectedBranchId!, page, limit),
     enabled: !!selectedBranchId,
   });
 
-  const batches = paginatedBatches?.data || [];
-  const meta = paginatedBatches?.meta || { total: 0, page, limit, totalPages: 1 };
+  const orders: ImportOrder[] = paginatedOrders?.data || [];
+  const meta = paginatedOrders?.meta || { total: 0, page, limit, totalPages: 1 };
 
-  const { data: distributors = [] } = useQuery({
-    queryKey: ['distributors'],
-    queryFn: () => import('../api/distributors').then(m => m.getDistributors()),
-  });
-
-  const deleteBatchMutation = useMutation({
-    mutationFn: deleteInventoryBatch,
+  const deleteMutation = useMutation({
+    mutationFn: deleteImportOrder,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
+      queryClient.invalidateQueries({ queryKey: ['importOrders'] });
       queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
     }
   });
@@ -61,7 +54,6 @@ const InventoryPage: React.FC = () => {
       e.target.value = '';
       return;
     }
-
     setIsImportingLegacy(true);
     setImportErrors([]);
     try {
@@ -71,86 +63,63 @@ const InventoryPage: React.FC = () => {
       if (success > 0) alert(`Import thành công ${success} bản ghi`);
       if (errors.length > 0) {
         setImportErrors(errors);
-        alert(`Một số dòng không hợp lệ. Vui lòng tải file lỗi để xem chi tiết.`);
       }
-      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
-      queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['importOrders'] });
     } catch (err: any) {
-      console.error(err);
-      const errMsg = err?.response?.data?.message || err.message || 'Có lỗi khi import';
-      alert(errMsg);
+      alert(err?.response?.data?.message || err.message || 'Có lỗi khi import');
     } finally {
       setIsImportingLegacy(false);
       e.target.value = '';
     }
   };
 
-  // Filtering
-  const filteredBatches = batches.filter((batch: InventoryBatch) => {
-    const matchesSearch = batch.product?.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         (batch.product?.barcode && batch.product.barcode.includes(searchTerm));
-    const matchesDistributor = !filterDistributorId || batch.distributorId === filterDistributorId;
-    return matchesSearch && matchesDistributor;
-  });
-
-  const formatQuantity = (qty: number, product?: Product) => {
-    const packagingUnit = product?.units?.find(pu => pu.conversionFactor > 1);
-    
-    if (!product || !packagingUnit) {
-      return `${qty.toLocaleString()} ${product?.unit?.name || ''}`;
-    }
-
-    const factor = packagingUnit.conversionFactor || 1;
-    const boxes = Math.floor(qty / factor);
-    const pieces = qty % factor;
-    const packagingUnitName = packagingUnit.unit?.name || 'Đơn vị lớn';
-
-    if (boxes === 0) return `${pieces} ${product.unit?.name || ''}`;
-    if (pieces === 0) return `${boxes} ${packagingUnitName}`;
-    
-    return `${boxes} ${packagingUnitName} ${pieces} ${product.unit?.name || ''}`;
-  };
-
   const handleExportExcel = () => {
-    const exportData = filteredBatches.map((batch: InventoryBatch, idx: number) => ({
+    const exportData = filteredOrders.map((order: ImportOrder, idx: number) => ({
       'STT': idx + 1,
-      'Tên sản phẩm': batch.product?.name || 'Sản phẩm đã xóa',
-      'Mã vạch': batch.product?.barcode || '--',
-      'Nhà cung cấp': batch.distributor?.name || '--',
-      'Người nhập': batch.personnelName || '--',
-      'Số lượng nhập': batch.importedQuantity,
-      'Tồn kho': batch.currentQuantity,
-      'Đơn vị': batch.product?.unit?.name || '--',
-      'Giá nhập (đơn giá)': Number(batch.costPrice),
-      'Thành tiền': batch.importedQuantity * Number(batch.costPrice),
-      'Ngày nhập': batch.importDate ? new Date(batch.importDate).toLocaleDateString('vi-VN') : '--',
-      'Hạn sử dụng': batch.expiryDate ? new Date(batch.expiryDate).toLocaleDateString('vi-VN') : '--',
-      'Số hóa đơn': batch.invoiceName || '--'
+      'Mã phiếu': order.code,
+      'Ngày nhập': order.importDate ? new Date(order.importDate).toLocaleDateString('vi-VN') : '--',
+      'Nhà cung cấp': order.distributor?.name || '--',
+      'Số hóa đơn': order.invoiceName || '--',
+      'Người nhập': order.personnelName || '--',
+      'Số mặt hàng': order.batches?.length || 0,
+      'Tổng tiền': Number(order.totalAmount).toLocaleString(),
     }));
-
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
-    
-    // Set column widths
-    const wscols = [
-      {wch: 5}, {wch: 30}, {wch: 15}, {wch: 25}, {wch: 20}, 
-      {wch: 15}, {wch: 10}, {wch: 10}, {wch: 15}, {wch: 15}, 
-      {wch: 15}, {wch: 15}, {wch: 20}
-    ];
-    ws['!cols'] = wscols;
+    XLSX.utils.book_append_sheet(wb, ws, 'PhieuNhap');
+    XLSX.writeFile(wb, `phieu_nhap_kho_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
 
-    XLSX.writeFile(wb, `bao_cao_nhap_kho_${new Date().toISOString().split('T')[0]}.xlsx`);
+  const filteredOrders = orders.filter((order: ImportOrder) => {
+    const q = searchTerm.toLowerCase();
+    return (
+      order.code?.toLowerCase().includes(q) ||
+      order.invoiceName?.toLowerCase().includes(q) ||
+      order.distributor?.name?.toLowerCase().includes(q) ||
+      order.personnelName?.toLowerCase().includes(q)
+    );
+  });
+
+  const statusColor = (status: string) => {
+    if (status === 'COMPLETED') return { bg: '#dcfce7', text: '#16a34a' };
+    if (status === 'CANCELLED') return { bg: '#fee2e2', text: '#dc2626' };
+    return { bg: '#fef9c3', text: '#ca8a04' };
+  };
+
+  const statusLabel = (status: string) => {
+    if (status === 'COMPLETED') return 'Hoàn thành';
+    if (status === 'CANCELLED') return 'Đã hủy';
+    return 'Nháp';
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '1.5rem', backgroundColor: '#f8fafc' }}>
-      
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '1rem' }}>
         <div>
           <h1 style={{ fontSize: '1.875rem', fontWeight: '700', color: '#1e293b', marginBottom: '0.25rem' }}>Quản lý nhập kho</h1>
-          <p style={{ color: '#64748b' }}>Chi tiết lô hàng và hạn dùng theo nhà cung cấp</p>
+          <p style={{ color: '#64748b' }}>Danh sách phiếu nhập hàng hóa</p>
         </div>
 
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
@@ -161,13 +130,13 @@ const InventoryPage: React.FC = () => {
             ref={legacyFileRef}
             onChange={handleLegacyFileChange}
           />
-          <button 
-            className="btn-secondary" 
+          <button
+            className="btn-secondary"
             onClick={handleExportExcel}
             style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem' }}
           >
             <FileDown size={16} />
-            {t('inventory.btn_export')}
+            Xuất Excel
           </button>
           <button
             className="btn-secondary"
@@ -182,17 +151,12 @@ const InventoryPage: React.FC = () => {
             <button
               className="btn-secondary"
               onClick={() => {
-                // generate and download excel of errors
                 const exportData = importErrors.map((err: any, idx: number) => ({
-                  STT: idx + 1,
-                  DONG: err.row ?? err.rowNum ?? '',
-                  PRODUCT: err.product ?? err.productIdentifier ?? '',
-                  REASON: err.reason ?? err.message ?? JSON.stringify(err),
+                  STT: idx + 1, DONG: err.row ?? '', PRODUCT: err.product ?? '', REASON: err.reason ?? '',
                 }));
                 const ws = XLSX.utils.json_to_sheet(exportData);
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, 'Errors');
-                ws['!cols'] = [{ wch: 6 }, { wch: 10 }, { wch: 30 }, { wch: 80 }];
                 XLSX.writeFile(wb, `import_errors_${new Date().toISOString().slice(0, 10)}.xlsx`);
               }}
               style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem' }}
@@ -201,8 +165,8 @@ const InventoryPage: React.FC = () => {
               Tải lỗi ({importErrors.length})
             </button>
           )}
-          <button 
-            className="btn-primary" 
+          <button
+            className="btn-primary"
             onClick={() => navigate('/admin/inventory/import')}
             style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1rem', backgroundColor: '#3b82f6', border: 'none' }}
           >
@@ -212,16 +176,35 @@ const InventoryPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content Area */}
+      {/* Stats Row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+        {[
+          { label: 'Tổng phiếu', value: meta.total, icon: Receipt, color: '#3b82f6', bg: '#eff6ff' },
+          { label: 'Tổng mặt hàng', value: orders.reduce((s, o) => s + (o.batches?.length || 0), 0), icon: Package, color: '#10b981', bg: '#f0fdf4' },
+          { label: 'Tổng tiền nhập', value: orders.reduce((s, o) => s + Number(o.totalAmount || 0), 0).toLocaleString() + ' ₫', icon: FileDown, color: '#f59e0b', bg: '#fffbeb' },
+        ].map((stat, i) => (
+          <div key={i} style={{ backgroundColor: 'white', borderRadius: '0.75rem', padding: '1rem 1.25rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: '2.5rem', height: '2.5rem', borderRadius: '0.5rem', backgroundColor: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <stat.icon size={20} color={stat.color} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.15rem' }}>{stat.label}</div>
+              <div style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1e293b' }}>{stat.value}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Main Content */}
       <div className="card" style={{ flex: 1, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        
-        {/* Search & Filter Bar */}
-        <div style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0', backgroundColor: 'white', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
+
+        {/* Search Bar */}
+        <div style={{ padding: '1rem', borderBottom: '1px solid #e2e8f0', backgroundColor: 'white', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <div style={{ position: 'relative', flex: 1, maxWidth: '400px' }}>
             <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-            <input 
-              type="text" 
-              placeholder={t('common.search_placeholder')} 
+            <input
+              type="text"
+              placeholder="Tìm theo mã phiếu, số HĐ, nhà cung cấp..."
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
               style={{
@@ -231,65 +214,135 @@ const InventoryPage: React.FC = () => {
               }}
             />
           </div>
-
-          <select 
-            className="form-control"
-            style={{ maxWidth: '250px' }}
-            value={filterDistributorId}
-            onChange={(e) => { setFilterDistributorId(e.target.value); setPage(1); }}
-          >
-            <option value="">-- Tất cả nhà cung cấp --</option>
-            {distributors.map((d: any) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
         </div>
 
-        {/* Data Table */}
+        {/* Table */}
         <div style={{ flex: 1, overflow: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1000px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '800px' }}>
             <thead style={{ backgroundColor: '#10b981', color: 'white', position: 'sticky', top: 0, zIndex: 10 }}>
               <tr>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>{t('inventory.col_index')}</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>{t('inventory.col_name')}</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>Nhà cung cấp</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>Người nhập</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>{t('inventory.col_imported')}</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>{t('inventory.col_stock')}</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>{t('inventory.col_cost')}</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>{t('inventory.label_import_date')}</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>{t('inventory.label_expiry_date')}</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'center' }}>{t('inventory.col_actions')}</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>STT</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Receipt size={14} /> Mã phiếu</div>
+                </th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Calendar size={14} /> Ngày nhập</div>
+                </th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Building2 size={14} /> Nhà cung cấp</div>
+                </th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>Số HĐ</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><User size={14} /> Người nhập</div>
+                </th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}><Package size={14} /> Mặt hàng</div>
+                </th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>Tổng tiền</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'center' }}>Trạng thái</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>
-              {isLoadingBatches && <LoadingRow cols={10} text={t('inventory.fetching')} />}
-              {!isLoadingBatches && filteredBatches.length === 0 && <EmptyRow cols={10} text={t('inventory.empty')} />}
-
-              {filteredBatches.map((batch: InventoryBatch, idx: number) => (
-                <tr key={batch.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? 'white' : '#f8fafc' }}>
-                  <td style={{ padding: '1rem', color: '#64748b' }}>{idx + 1}</td>
-                  <td style={{ padding: '1rem', fontWeight: '500', color: '#1e293b' }}>{batch.product?.name || 'Sản phẩm đã xóa'}</td>
-                  <td style={{ padding: '1rem', color: '#64748b' }}>{batch.distributor?.name || '--'}</td>
-                  <td style={{ padding: '1rem', color: '#64748b' }}>{batch.personnelName || '--'}</td>
-                  <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '500' }}>{formatQuantity(batch.importedQuantity, batch.product)}</td>
-                  <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '600', color: batch.currentQuantity > 0 ? '#10b981' : '#ef4444' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                      <span>{formatQuantity(batch.currentQuantity, batch.product)}</span>
-                      <span style={{ fontSize: '0.75rem', fontWeight: '400', color: '#94a3b8' }}>({batch.currentQuantity.toLocaleString()} {batch.product?.unit?.name})</span>
-                    </div>
-                  </td>
-                  <td style={{ padding: '1rem', textAlign: 'right' }}>{Number(batch.costPrice).toLocaleString()} ₫</td>
-                  <td style={{ padding: '1rem', color: '#64748b' }}>{batch.importDate ? new Date(batch.importDate).toLocaleDateString() : '--'}</td>
-                  <td style={{ padding: '1rem', color: '#ef4444' }}>{batch.expiryDate ? new Date(batch.expiryDate).toLocaleDateString() : '--'}</td>
-                  <td style={{ padding: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem' }}>
-                      <button onClick={() => navigate(`/admin/inventory/import?editId=${batch.id}`)} style={{ padding: '0.25rem', color: '#3b82f6', background: 'transparent', border: 'none', cursor: 'pointer' }}><Edit2 size={16} /></button>
-                      <button onClick={() => { if (window.confirm(t('inventory.delete_confirm'))) deleteBatchMutation.mutate(batch.id); }} style={{ padding: '0.25rem', color: '#ef4444', background: 'transparent', border: 'none', cursor: 'pointer' }}><Trash2 size={16} /></button>
+              {isLoading && (
+                <tr>
+                  <td colSpan={10} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Đang tải...</td>
+                </tr>
+              )}
+              {!isLoading && filteredOrders.length === 0 && (
+                <tr>
+                  <td colSpan={10} style={{ padding: '4rem', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', color: '#94a3b8' }}>
+                      <div style={{ width: '4rem', height: '4rem', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Package size={32} color="#cbd5e1" />
+                      </div>
+                      <p style={{ margin: 0, fontWeight: '500' }}>Chưa có phiếu nhập kho nào</p>
+                      <button
+                        onClick={() => navigate('/admin/inventory/import')}
+                        style={{ padding: '0.5rem 1.25rem', backgroundColor: '#3b82f6', color: 'white', border: 'none', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: '600' }}
+                      >
+                        + Tạo phiếu nhập
+                      </button>
                     </div>
                   </td>
                 </tr>
-              ))}
+              )}
+
+              {filteredOrders.map((order: ImportOrder, idx: number) => {
+                const sc = statusColor(order.status);
+                const totalItems = order.batches?.length || 0;
+                return (
+                  <tr
+                    key={order.id}
+                    onClick={() => navigate(`/admin/inventory/orders/${order.id}`)}
+                    style={{
+                      borderBottom: '1px solid #f1f5f9',
+                      backgroundColor: idx % 2 === 0 ? 'white' : '#f8fafc',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.15s',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#eff6ff')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = idx % 2 === 0 ? 'white' : '#f8fafc')}
+                  >
+                    <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.875rem' }}>{(page - 1) * limit + idx + 1}</td>
+                    <td style={{ padding: '1rem' }}>
+                      <div style={{ fontWeight: '700', color: '#3b82f6', fontSize: '0.9rem' }}>{order.code}</div>
+                    </td>
+                    <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.875rem' }}>
+                      {order.importDate ? new Date(order.importDate).toLocaleDateString('vi-VN') : '--'}
+                    </td>
+                    <td style={{ padding: '1rem', color: '#1e293b', fontWeight: '500', fontSize: '0.875rem' }}>
+                      {order.distributor?.name || <span style={{ color: '#94a3b8' }}>--</span>}
+                    </td>
+                    <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.875rem' }}>
+                      {order.invoiceName || <span style={{ color: '#94a3b8' }}>--</span>}
+                    </td>
+                    <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.875rem' }}>
+                      {order.personnelName || '--'}
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        width: '2rem', height: '2rem', borderRadius: '50%',
+                        backgroundColor: '#eff6ff', color: '#3b82f6', fontWeight: '700', fontSize: '0.875rem'
+                      }}>
+                        {totalItems}
+                      </span>
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '700', color: '#1e293b' }}>
+                      {Number(order.totalAmount).toLocaleString()} ₫
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                      <span style={{
+                        padding: '0.25rem 0.75rem', borderRadius: '9999px',
+                        backgroundColor: sc.bg, color: sc.text,
+                        fontSize: '0.75rem', fontWeight: '600'
+                      }}>
+                        {statusLabel(order.status)}
+                      </span>
+                    </td>
+                    <td style={{ padding: '1rem' }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
+                        <button
+                          onClick={() => navigate(`/admin/inventory/orders/${order.id}`)}
+                          style={{ padding: '0.35rem 0.75rem', color: '#3b82f6', background: '#eff6ff', border: 'none', borderRadius: '0.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', fontWeight: '600' }}
+                        >
+                          Chi tiết <ChevronRight size={14} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Xóa phiếu nhập này? Các lô hàng liên quan sẽ không bị xóa.'))
+                              deleteMutation.mutate(order.id);
+                          }}
+                          style={{ padding: '0.35rem', color: '#ef4444', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -301,19 +354,8 @@ const InventoryPage: React.FC = () => {
         onPageChange={setPage}
         totalItems={meta.total}
       />
-
-      {/* Modals (handled via navigation) */}
     </div>
   );
 };
-
-// UI Components
-const LoadingRow: React.FC<{ cols: number, text: string }> = ({ cols, text }) => (
-  <tr><td colSpan={cols} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{text}</td></tr>
-);
-
-const EmptyRow: React.FC<{ cols: number, text: string }> = ({ cols, text }) => (
-  <tr><td colSpan={cols} style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>{text}</td></tr>
-);
 
 export default InventoryPage;

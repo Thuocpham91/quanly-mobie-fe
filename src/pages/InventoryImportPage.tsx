@@ -9,7 +9,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { 
   getProducts, bulkCreateInventoryBatches, getUnits, createProduct, 
-  getInventoryBatch, updateInventoryBatch, processInventoryUpload, type Product
+  getInventoryBatch, updateInventoryBatch, processInventoryUpload, type Product,
+  createImportOrder,
 } from '../api/inventory';
 import { getDistributors } from '../api/distributors';
 import { getUsers } from '../api/users';
@@ -98,6 +99,7 @@ const InventoryImportPage: React.FC = () => {
     if (editingBatch && editId) {
       setImportDate(editingBatch.importDate ? new Date(editingBatch.importDate).toISOString().split('T')[0] : '');
       setDistributorId(editingBatch.distributorId || '');
+      setDistributorSearch(editingBatch.distributor?.name || '');
       setInvoiceName(editingBatch.invoiceName || '');
       setPersonnelId(editingBatch.personnelName || '');
       setTaxPercentage(editingBatch.taxAmount ? (editingBatch.taxAmount / (editingBatch.costPrice || 1)) * 100 : 0); // Simplified back-calc
@@ -162,6 +164,8 @@ const InventoryImportPage: React.FC = () => {
   // Search State
   const [productSearch, setProductSearch] = useState('');
   const [showProductResults, setShowProductResults] = useState(false);
+  const [distributorSearch, setDistributorSearch] = useState('');
+  const [showDistributorDropdown, setShowDistributorDropdown] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -179,10 +183,11 @@ const InventoryImportPage: React.FC = () => {
 
   // Mutations
   const importMutation = useMutation({
-    mutationFn: bulkCreateInventoryBatches,
+    mutationFn: createImportOrder,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
       queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
+      queryClient.invalidateQueries({ queryKey: ['importOrders'] });
       navigate('/admin/inventory');
     }
   });
@@ -220,13 +225,16 @@ const InventoryImportPage: React.FC = () => {
 
   // Handlers
   const handleAddItem = (product: Product, details?: any) => {
+    const baseQty = 1;
+    const baseUnitId = details?.baseUnitId || product.unitId || '';
+    const preFillPrice = product.basePrice || 0;
     const newItem: ImportItem = {
       id: Math.random().toString(36).substr(2, 9),
       product,
-      unitQuantities: details?.unitQuantities || { [product.unitId || '']: 0 },
-      quantityPieces: details?.quantityPieces || 0,
-      baseUnitId: details?.baseUnitId || product.unitId || '',
-      costPrice: details?.costPrice || 0,
+      unitQuantities: details?.unitQuantities || { [baseUnitId]: baseQty },
+      quantityPieces: details?.quantityPieces || baseQty,
+      baseUnitId,
+      costPrice: details?.costPrice || preFillPrice * baseQty,
       priceType: details?.priceType || 'base',
       expiryDate: details?.expiryDate || '',
       isGift: false,
@@ -259,7 +267,7 @@ const InventoryImportPage: React.FC = () => {
     if (!selectedBranchId) return alert('Please select a branch');
     if (items.length === 0) return alert('Please add at least one product');
 
-    const batches = items.map(item => {
+    const orderItems = items.map(item => {
       let totalQty = item.unitQuantities[item.baseUnitId] || 0;
       item.product.units?.forEach((pu: any) => {
         totalQty += (item.unitQuantities[pu.unitId] || 0) * pu.conversionFactor;
@@ -276,27 +284,33 @@ const InventoryImportPage: React.FC = () => {
 
       return {
         productId: item.product.id,
-        branchId: selectedBranchId,
-        distributorId: distributorId || undefined,
         importedQuantity: totalQty,
         costPrice: Math.round(unitPrice),
-        unitId: item.baseUnitId || undefined,
-        importDate: importDate,
         expiryDate: item.expiryDate || undefined,
-        invoiceName: invoiceName || undefined,
         isGift: item.isGift,
-        taxAmount: taxAmount / items.length, 
-        discountAmount: discountAmount / items.length,
-        shippingFee: shippingFee / items.length,
-        personnelName: personnelId,
       };
     });
 
     if (editId) {
-      // For editing, we only support editing one at a time via this flow for now
-      await updateMutation.mutateAsync(batches[0]);
+      // For editing single batch
+      const first = orderItems[0];
+      await updateMutation.mutateAsync({
+        costPrice: first.costPrice,
+        currentQuantity: first.importedQuantity,
+      });
     } else {
-      await importMutation.mutateAsync(batches);
+      await importMutation.mutateAsync({
+        branchId: selectedBranchId,
+        distributorId: distributorId || undefined,
+        invoiceName: invoiceName || undefined,
+        personnelName: personnelId || undefined,
+        importDate: importDate,
+        taxAmount: taxAmount,
+        discountAmount: discountAmount,
+        shippingFee: shippingFee,
+        totalAmount: total,
+        items: orderItems,
+      });
     }
   };
 
@@ -379,8 +393,9 @@ const InventoryImportPage: React.FC = () => {
 
   const filteredProducts = products.filter((p: Product) => 
     p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
-    (p.barcode && p.barcode.includes(productSearch))
-  ).slice(0, 10);
+    (p.barcode && p.barcode.includes(productSearch)) ||
+    (p.productCode && p.productCode.toLowerCase().includes(productSearch.toLowerCase()))
+  ).slice(0, 50);
 
   return (
     <div style={{ 
@@ -471,7 +486,7 @@ const InventoryImportPage: React.FC = () => {
         </div>
       )}
 
-      <div className="card" style={{ padding: '1.5rem', marginBottom: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
+      <div className="card" style={{ padding: '1.5rem', marginBottom: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', overflow: 'visible' }}>
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)', gap: '1.25rem' }}>
           
           <div className="form-group">
@@ -488,23 +503,85 @@ const InventoryImportPage: React.FC = () => {
             />
           </div>
 
-          <div className="form-group">
+          <div className="form-group" style={{ position: 'relative' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem', fontSize: '0.85rem', fontWeight: '700', color: '#64748b' }}>
               <Building2 size={16} className="text-primary" />
               Nhà phân phối
             </label>
             <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <select 
-                value={distributorId} 
-                onChange={(e) => setDistributorId(e.target.value)}
-                className="form-control"
-                style={{ flex: 1, padding: '0.6rem 0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.9rem', outline: 'none', appearance: 'none', backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'%2364748b\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'%3E%3C/path%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem' }}
-              >
-                <option value="">Chọn nhà phân phối</option>
-                {distributors.map((d: any) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
+              <div style={{ flex: 1, position: 'relative' }}>
+                <input
+                  type="text"
+                  placeholder="Gõ tên để tìm nhà phân phối..."
+                  value={distributorSearch}
+                  onChange={(e) => {
+                    setDistributorSearch(e.target.value);
+                    setShowDistributorDropdown(true);
+                    // Clear selection if user clears input
+                    if (!e.target.value) setDistributorId('');
+                  }}
+                  onFocus={() => setShowDistributorDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowDistributorDropdown(false), 150)}
+                  className="form-control"
+                  style={{ width: '100%', padding: '0.6rem 2rem 0.6rem 0.8rem', borderRadius: '0.5rem', border: `1px solid ${distributorId ? '#10b981' : '#cbd5e1'}`, fontSize: '0.9rem', outline: 'none', backgroundColor: distributorId ? '#f0fdf4' : 'white' }}
+                />
+                {distributorId && (
+                  <button
+                    type="button"
+                    onClick={() => { setDistributorId(''); setDistributorSearch(''); }}
+                    style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1rem', lineHeight: 1, padding: '0.1rem' }}
+                    title="Xóa lựa chọn"
+                  >
+                    ×
+                  </button>
+                )}
+                {showDistributorDropdown && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+                    backgroundColor: 'white', borderRadius: '0.5rem',
+                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)',
+                    marginTop: '0.25rem', border: '1px solid #e2e8f0',
+                    maxHeight: '200px', overflowY: 'auto'
+                  }}>
+                    {distributors
+                      .filter((d: any) =>
+                        !distributorSearch ||
+                        d.name.toLowerCase().includes(distributorSearch.toLowerCase()) ||
+                        (d.phone && d.phone.includes(distributorSearch))
+                      )
+                      .map((d: any) => (
+                        <div
+                          key={d.id}
+                          onMouseDown={() => {
+                            setDistributorId(d.id);
+                            setDistributorSearch(d.name);
+                            setShowDistributorDropdown(false);
+                          }}
+                          style={{
+                            padding: '0.6rem 0.9rem',
+                            cursor: 'pointer',
+                            backgroundColor: d.id === distributorId ? '#eff6ff' : 'white',
+                            borderBottom: '1px solid #f1f5f9',
+                            display: 'flex', flexDirection: 'column', gap: '0.1rem'
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = d.id === distributorId ? '#eff6ff' : 'white')}
+                        >
+                          <span style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.875rem' }}>{d.name}</span>
+                          {d.phone && <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{d.phone}</span>}
+                        </div>
+                      ))
+                    }
+                    {distributors.filter((d: any) =>
+                      !distributorSearch ||
+                      d.name.toLowerCase().includes(distributorSearch.toLowerCase()) ||
+                      (d.phone && d.phone.includes(distributorSearch))
+                    ).length === 0 && (
+                      <div style={{ padding: '0.75rem 0.9rem', color: '#94a3b8', fontSize: '0.875rem', textAlign: 'center' }}>Không tìm thấy</div>
+                    )}
+                  </div>
+                )}
+              </div>
               <button className="btn-secondary" style={{ padding: '0 0.6rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Thêm nhà phân phối">
                 <Plus size={18} />
               </button>
@@ -593,13 +670,16 @@ const InventoryImportPage: React.FC = () => {
               <div style={{ 
                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
                 backgroundColor: 'white', borderRadius: '0.5rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
-                marginTop: '0.5rem', border: '1px solid #e2e8f0', overflow: 'hidden'
+                marginTop: '0.5rem', border: '1px solid #e2e8f0',
+                maxHeight: '320px', overflowY: 'auto'
               }}>
                 {filteredProducts.length > 0 ? filteredProducts.map((p: Product) => (
                   <div 
                     key={p.id} 
                     onClick={() => handleAddItem(p)}
                     style={{ padding: '0.75rem 1rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9' }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'white')}
                   >
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: '600', color: '#1e293b', fontSize: isMobile ? '0.875rem' : '1rem' }}>{p.name}</div>
@@ -690,16 +770,17 @@ const InventoryImportPage: React.FC = () => {
             </div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
+              <thead style={{ backgroundColor: '#10b981', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr>
-                  <th style={{ padding: '0.75rem 1rem' }}>STT</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Tên mặt hàng</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Hạn sử dụng</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Đơn vị</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Số lượng</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Thành tiền</th>
-                  <th style={{ padding: '0.75rem 1rem' }}>Quà tặng</th>
-                  <th style={{ padding: '0.75rem 1rem' }}></th>
+                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '44px' }}>STT</th>
+                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600' }}>Tên mặt hàng</th>
+                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '130px' }}>HSD</th>
+                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '90px' }}>ĐVT</th>
+                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '110px', textAlign: 'right' }}>SL nhập</th>
+                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '160px', textAlign: 'right' }}>Đơn giá nhập (₫)</th>
+                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '130px', textAlign: 'right' }}>Thành tiền</th>
+                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '80px', textAlign: 'center' }}>Quà</th>
+                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '70px' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -714,39 +795,77 @@ const InventoryImportPage: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                ) : items.map((item, idx) => (
-                  <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '0.75rem 1rem', color: '#64748b' }}>{idx + 1}</td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
+                ) : items.map((item, idx) => {
+                  // Tính tổng SL theo đơn vị cơ bản
+                  let totalQty = item.unitQuantities[item.baseUnitId] || 0;
+                  item.product.units?.forEach((pu: any) => {
+                    totalQty += (item.unitQuantities[pu.unitId] || 0) * pu.conversionFactor;
+                  });
+                  const unitPrice = totalQty > 0 ? Math.round(item.costPrice / totalQty) : item.costPrice;
+                  const lineTotal = item.isGift ? 0 : item.costPrice;
+
+                  return (
+                  <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? 'white' : '#fafafa' }}>
+                    <td style={{ padding: '0.6rem 1rem', color: '#64748b', fontSize: '0.875rem' }}>{idx + 1}</td>
+                    <td style={{ padding: '0.6rem 1rem' }}>
                       <div style={{ fontWeight: '600', color: '#1e293b' }}>{item.product.name}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{item.product.barcode || item.product.productCode || '--'}</div>
+                      <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{item.product.barcode || item.product.productCode || ''}</div>
                     </td>
-                    <td style={{ padding: '0.75rem 1rem' }}>{item.expiryDate || '--'}</td>
-                    <td style={{ padding: '0.75rem 1rem' }}>{units.find((u: any) => u.id === item.baseUnitId)?.name || '--'}</td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        {item.unitQuantities[item.baseUnitId] > 0 && (
-                          <div>{item.unitQuantities[item.baseUnitId]} {units.find((u: any) => u.id === item.baseUnitId)?.name}</div>
-                        )}
-                        {item.product.units?.map((pu: any) => (
-                          item.unitQuantities[pu.unitId] > 0 && (
-                            <div key={pu.unitId}>{item.unitQuantities[pu.unitId]} {pu.unit?.name}</div>
-                          )
-                        ))}
-                      </div>
+                    <td style={{ padding: '0.6rem 1rem' }}>
+                      <input
+                        type="date"
+                        value={item.expiryDate || ''}
+                        onChange={(e) => handleUpdateItem(item.id, { expiryDate: e.target.value })}
+                        style={{ padding: '0.3rem 0.5rem', borderRadius: '0.35rem', border: '1px solid #e2e8f0', fontSize: '0.8rem', width: '125px', outline: 'none' }}
+                      />
                     </td>
-                    <td style={{ padding: '0.75rem 1rem', fontWeight: '600' }}>
-                      {(item.isGift ? 0 : item.costPrice).toLocaleString()} ₫
+                    <td style={{ padding: '0.6rem 1rem', color: '#64748b', fontSize: '0.875rem' }}>
+                      {units.find((u: any) => u.id === item.baseUnitId)?.name || '--'}
                     </td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
+                    <td style={{ padding: '0.6rem 1rem', textAlign: 'right' }}>
+                      <input
+                        type="number"
+                        min={0}
+                        value={item.unitQuantities[item.baseUnitId] || 0}
+                        onChange={(e) => {
+                          const qty = Number(e.target.value) || 0;
+                          handleUpdateItem(item.id, {
+                            unitQuantities: { ...item.unitQuantities, [item.baseUnitId]: qty },
+                            quantityPieces: qty,
+                          });
+                        }}
+                        className="no-spinner"
+                        style={{ width: '80px', padding: '0.3rem 0.5rem', borderRadius: '0.35rem', border: '1px solid #e2e8f0', fontSize: '0.875rem', textAlign: 'right', outline: 'none' }}
+                      />
+                    </td>
+                    <td style={{ padding: '0.6rem 1rem', textAlign: 'right' }}>
+                      <input
+                        type="number"
+                        min={0}
+                        value={unitPrice || 0}
+                        onChange={(e) => {
+                          const newUnitPrice = Number(e.target.value) || 0;
+                          const qty = (item.unitQuantities[item.baseUnitId] || 0);
+                          handleUpdateItem(item.id, { costPrice: newUnitPrice * (qty || 1) });
+                        }}
+                        className="no-spinner"
+                        style={{ width: '130px', padding: '0.3rem 0.5rem', borderRadius: '0.35rem', border: '1px solid #10b981', backgroundColor: '#f0fdf4', fontSize: '0.875rem', fontWeight: '600', textAlign: 'right', outline: 'none', color: '#065f46' }}
+                      />
+                    </td>
+                    <td style={{ padding: '0.6rem 1rem', textAlign: 'right', fontWeight: '700', color: '#1e293b', fontSize: '0.9rem' }}>
+                      {item.isGift ? <span style={{ color: '#f59e0b' }}>Miễn phí</span> : `${lineTotal.toLocaleString()} ₫`}
+                    </td>
+                    <td style={{ padding: '0.6rem 1rem', textAlign: 'center' }}>
                       <input type="checkbox" checked={item.isGift} onChange={(e) => handleUpdateItem(item.id, { isGift: e.target.checked })} />
                     </td>
-                    <td style={{ padding: '0.75rem 1rem' }}>
-                      <button onClick={() => handleEditItem(item)} style={{ color: '#3b82f6', background: 'transparent', border: 'none', cursor: 'pointer', marginRight: '0.5rem' }}><Edit2 size={16} /></button>
-                      <button onClick={() => handleRemoveItem(item.id)} style={{ color: '#ef4444', background: 'transparent', border: 'none', cursor: 'pointer' }}><Trash2 size={16} /></button>
+                    <td style={{ padding: '0.6rem 1rem' }}>
+                      <button onClick={() => handleRemoveItem(item.id)} style={{ color: '#ef4444', background: 'transparent', border: 'none', cursor: 'pointer', padding: '0.25rem' }}>
+                        <Trash2 size={16} />
+                      </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

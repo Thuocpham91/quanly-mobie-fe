@@ -23,6 +23,7 @@ import StockHistoryPage from './pages/StockHistoryPage';
 import StocktakeListPage from './pages/StocktakeListPage';
 import StocktakeFormPage from './pages/StocktakeFormPage';
 import InventoryTransferPage from './pages/InventoryTransferPage';
+import InventoryOrderDetailPage from './pages/InventoryOrderDetailPage';
 import PermissionGuard from './guards/PermissionGuard';
 
 import { BranchProvider } from './context/BranchContext';
@@ -56,6 +57,7 @@ function App() {
               <Route path="appointments"            element={<P path="/admin/appointments"><AppointmentsPage /></P>} />
               <Route path="inventory"               element={<P path="/admin/inventory"><InventoryPage /></P>} />
               <Route path="inventory/import"        element={<P path="/admin/inventory/import"><InventoryImportPage /></P>} />
+              <Route path="inventory/orders/:id"    element={<P path="/admin/inventory"><InventoryOrderDetailPage /></P>} />
               <Route path="inventory/transfer"      element={<P path="/admin/inventory/transfer"><InventoryTransferPage /></P>} />
               <Route path="inventory/history"       element={<P path="/admin/inventory/history"><StockHistoryPage /></P>} />
               <Route path="inventory/stocktakes"    element={<P path="/admin/inventory/stocktakes"><StocktakeListPage /></P>} />
