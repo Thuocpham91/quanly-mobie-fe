@@ -10,17 +10,19 @@ import {
   CreditCard, 
   Wallet, 
   CheckCircle2, 
-  AlertCircle, 
   XCircle, 
   Loader2,
   Package,
   FileText,
   Clock,
-  FileSpreadsheet
+  FileSpreadsheet,
+  SlidersHorizontal,
+  Receipt
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { getOrders, updateOrderStatus, getOrderById, importOrdersExcel, importOrderDetailsExcel, type Order } from '../api/orders';
 import Pagination from '../components/Pagination';
+import SearchDrawer from '../components/SearchDrawer';
 import { useBranchContext } from '../context/BranchContext';
 
 const formatCurrency = (value: number) => {
@@ -39,8 +41,12 @@ const SalesOrdersPage: React.FC = () => {
   // Table search, status filter & pagination state
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [paymentFilter, setPaymentFilter] = useState<string>('ALL');
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
+
+  // Search Drawer state
+  const [isSearchDrawerOpen, setIsSearchDrawerOpen] = useState(false);
 
   // Selected order for details modal
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -49,6 +55,14 @@ const SalesOrdersPage: React.FC = () => {
   const [importedCount, setImportedCount] = useState<number | null>(null);
   const importFileRef = useRef<HTMLInputElement | null>(null);
   const importDetailsFileRef = useRef<HTMLInputElement | null>(null);
+
+  const activeFilterCount = (searchTerm ? 1 : 0) + (statusFilter !== 'ALL' ? 1 : 0) + (paymentFilter !== 'ALL' ? 1 : 0);
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('ALL');
+    setPaymentFilter('ALL');
+  };
 
   // --- API QUERIES ---
 
@@ -119,6 +133,10 @@ const SalesOrdersPage: React.FC = () => {
       return false;
     }
 
+    if (paymentFilter !== 'ALL' && order.paymentMethod !== paymentFilter) {
+      return false;
+    }
+
     // Search query (code, customer name, customer phone)
     if (searchTerm.trim() !== '') {
       const query = searchTerm.toLowerCase();
@@ -131,6 +149,10 @@ const SalesOrdersPage: React.FC = () => {
 
     return true;
   });
+
+  // Stats calculation
+  const completedOrders = rawOrders.filter(o => o.status === 'COMPLETED');
+  const totalRevenue = completedOrders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
 
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
@@ -248,14 +270,13 @@ const SalesOrdersPage: React.FC = () => {
         document.body.removeChild(link);
       }
       setImportErrors(errors.map((err: any) => {
-        if (err.row) return `Dòng ${err.row}: ${err.reason}`;
-        return err.reason || 'Lỗi không xác định';
+        if (typeof err === 'string') return err;
+        return `Dòng ${err.row || '?'}: ${err.reason || err.message || JSON.stringify(err)}`;
       }));
-      if (response.imported > 0) {
-        alert(`Đã import thành công ${response.imported} đơn hàng.`);
-      }
-      if (errors.length > 0) {
-        alert(`Một số đơn hàng không import được. Vui lòng kiểm tra chi tiết.`);
+      if (response.imported > 0 && errors.length === 0) {
+        alert(`Import thành công ${response.imported} đơn hàng!`);
+      } else if (errors.length > 0) {
+        alert(`Nhập file thành công ${response.imported || 0} đơn hàng, nhưng có ${errors.length} dòng bị lỗi. Tệp ghi chi tiết lỗi đã được tự động tải về.`);
       }
       queryClient.invalidateQueries({ queryKey: ['salesOrders'] });
     } catch (err: any) {
@@ -277,7 +298,7 @@ const SalesOrdersPage: React.FC = () => {
 
     try {
       // createMissingOrders=true, skipStockDeduction=true by default
-      const response = await importOrderDetailsExcel(file, { createMissingOrders: true, skipStockDeduction: true });
+      const response = await importOrderDetailsExcel(file);
       setImportedCount(response.imported || 0);
       const errors = response.errors || [];
       if (errors.length > 0 && response.errorFileName) {
@@ -291,12 +312,9 @@ const SalesOrdersPage: React.FC = () => {
         document.body.removeChild(link);
       }
       setImportErrors(errors.map((err: any) => {
-        if (err.row) return `Dòng ${err.row}: ${err.reason}`;
-        return err.reason || 'Lỗi không xác định';
+        if (typeof err === 'string') return err;
+        return `Dòng ${err.row || '?'}: ${err.reason || err.message || JSON.stringify(err)}`;
       }));
-      if (response.imported > 0) {
-        alert(`Đã import thành công ${response.imported} đơn hàng/chi tiết.`);
-      }
       if (errors.length > 0) {
         alert(`Một số dòng không import được. Vui lòng kiểm tra chi tiết.`);
       }
@@ -311,154 +329,135 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', fontFamily: '"Inter", sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '0.25rem 0.5rem', backgroundColor: '#f8fafc', gap: '0.75rem' }}>
       
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.875rem', fontWeight: '800', color: '#0f172a', marginBottom: '0.25rem' }}>Quản lý Đơn Hàng</h1>
-          <p style={{ color: '#64748b' }}>Xem lịch sử, thông tin chi tiết và cập nhật trạng thái các đơn hàng bán sản phẩm.</p>
+          <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1e293b', margin: 0 }}>Quản lý đơn hàng</h1>
+          <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0, marginTop: '0.1rem' }}>Danh sách đơn hàng bán lẻ và lịch sử bán hàng</p>
         </div>
-      </div>
 
-      {/* Filters card */}
-      <div className="card" style={{ padding: '1.25rem' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', justifyContent: 'space-between' }}>
-          
-          {/* Search Bar */}
-          <div style={{ position: 'relative', flex: '1 1 300px' }}>
-            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-            <input
-              type="text"
-              placeholder="Tìm kiếm theo mã đơn, khách hàng, số điện thoại..."
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {/* Header Search Box */}
+          <div style={{ position: 'relative', width: '240px' }}>
+            <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            <input 
+              type="text" 
+              placeholder="Tìm theo mã đơn, SĐT..." 
               value={searchTerm}
               onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
               style={{
                 width: '100%',
-                padding: '0.6rem 1rem 0.6rem 2.5rem',
-                borderRadius: '0.5rem',
+                padding: '0.45rem 0.85rem 0.45rem 2.2rem',
+                borderRadius: '0.375rem',
                 border: '1px solid #cbd5e1',
                 outline: 'none',
-                fontSize: '0.875rem'
+                fontSize: '0.85rem',
+                backgroundColor: '#ffffff',
               }}
             />
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              style={{ display: 'none' }}
-              ref={importFileRef}
-              onChange={handleImportOrders}
-            />
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              style={{ display: 'none' }}
-              ref={importDetailsFileRef}
-              onChange={handleImportOrderDetails}
-            />
-            <button
-              onClick={() => importFileRef.current?.click()}
-              disabled={isImporting}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                padding: '0.5rem 0.9rem',
-                borderRadius: '999px',
-                border: '1px solid #cbd5e1',
-                backgroundColor: '#ffffff',
-                color: '#475569',
-                cursor: isImporting ? 'not-allowed' : 'pointer',
-                fontSize: '0.85rem'
-              }}
-            >
-              <FileSpreadsheet size={16} />
-              {isImporting ? 'Đang import...' : 'Import đơn hàng'}
-            </button>
-            <button
-              onClick={() => importDetailsFileRef.current?.click()}
-              disabled={isImporting}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                padding: '0.5rem 0.9rem',
-                borderRadius: '999px',
-                border: '1px solid #cbd5e1',
-                backgroundColor: '#ffffff',
-                color: '#475569',
-                cursor: isImporting ? 'not-allowed' : 'pointer',
-                fontSize: '0.85rem'
-              }}
-            >
-              <Package size={16} />
-              Import chi tiết
-            </button>
-            <button
-              onClick={downloadSampleExcel}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.35rem',
-                padding: '0.5rem 0.9rem',
-                borderRadius: '999px',
-                border: '1px solid #cbd5e1',
-                backgroundColor: '#ffffff',
-                color: '#475569',
-                cursor: 'pointer',
-                fontSize: '0.85rem'
-              }}
-            >
-              <FileText size={16} />
-              Mẫu import
-            </button>
-          </div>
-
-          {/* Status filter tabs */}
-          <div style={{ display: 'flex', gap: '0.35rem', overflowX: 'auto' }}>
-            {[
-              { value: 'ALL', label: 'Tất cả' },
-              { value: 'PENDING', label: 'Chờ xử lý' },
-              { value: 'COMPLETED', label: 'Hoàn thành' },
-              { value: 'CANCELLED', label: 'Đã hủy' }
-            ].map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() => { setStatusFilter(tab.value); setPage(1); }}
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setIsSearchDrawerOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
+          >
+            <SlidersHorizontal size={16} style={{ color: '#6366f1' }} />
+            Menu tìm kiếm
+            {activeFilterCount > 0 && (
+              <span
                 style={{
-                  padding: '0.45rem 1rem',
-                  borderRadius: '2rem',
-                  border: statusFilter === tab.value ? 'none' : '1px solid #cbd5e1',
-                  backgroundColor: statusFilter === tab.value ? '#6366f1' : 'white',
-                  color: statusFilter === tab.value ? 'white' : '#64748b',
-                  fontSize: '0.85rem',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.2s'
+                  backgroundColor: '#6366f1',
+                  color: '#ffffff',
+                  borderRadius: '9999px',
+                  padding: '0.05rem 0.4rem',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
                 }}
               >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
 
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            style={{ display: 'none' }}
+            ref={importFileRef}
+            onChange={handleImportOrders}
+          />
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            style={{ display: 'none' }}
+            ref={importDetailsFileRef}
+            onChange={handleImportOrderDetails}
+          />
+
+          <button
+            className="btn-secondary"
+            onClick={() => importFileRef.current?.click()}
+            disabled={isImporting}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
+          >
+            <FileSpreadsheet size={16} />
+            {isImporting ? 'Đang import...' : 'Import đơn hàng'}
+          </button>
+
+          <button
+            className="btn-secondary"
+            onClick={() => importDetailsFileRef.current?.click()}
+            disabled={isImporting}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
+          >
+            <Package size={16} />
+            Import chi tiết
+          </button>
+
+          <button
+            className="btn-secondary"
+            onClick={downloadSampleExcel}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
+          >
+            <FileText size={16} />
+            Mẫu import
+          </button>
         </div>
       </div>
 
+      {/* Stats Row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '0.5rem' }}>
+        {[
+          { label: 'Tổng đơn hàng', value: meta?.total || rawOrders.length, icon: Receipt, color: '#3b82f6', bg: '#eff6ff' },
+          { label: 'Đã hoàn thành', value: completedOrders.length, icon: CheckCircle2, color: '#10b981', bg: '#f0fdf4' },
+          { label: 'Tổng doanh thu', value: formatCurrency(totalRevenue), icon: DollarSign, color: '#f59e0b', bg: '#fffbeb' },
+        ].map((stat, i) => (
+          <div key={i} style={{ backgroundColor: 'white', borderRadius: '0.75rem', padding: '0.75rem 1.25rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: '2.5rem', height: '2.5rem', borderRadius: '0.5rem', backgroundColor: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <stat.icon size={20} color={stat.color} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.15rem' }}>{stat.label}</div>
+              <div style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1e293b' }}>{stat.value}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {(importedCount !== null || importErrors.length > 0) && (
-        <div className="card" style={{ padding: '1rem', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+        <div className="card" style={{ padding: '0.75rem 1rem', border: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
           {importedCount !== null && (
-            <div style={{ color: '#0f5132', marginBottom: importErrors.length > 0 ? '0.75rem' : 0 }}>
+            <div style={{ color: '#0f5132', marginBottom: importErrors.length > 0 ? '0.5rem' : 0 }}>
               Đã import thành công {importedCount} đơn hàng.
             </div>
           )}
           {importErrors.length > 0 && (
             <div style={{ color: '#842029' }}>
-              <div style={{ fontWeight: '700', marginBottom: '0.5rem' }}>Lỗi import:</div>
+              <div style={{ fontWeight: '700', marginBottom: '0.25rem' }}>Lỗi import:</div>
               <ul style={{ margin: 0, paddingLeft: '1.2rem' }}>
                 {importErrors.slice(0, 5).map((error, idx) => (
                   <li key={`${error}-${idx}`}>{error}</li>
@@ -823,6 +822,86 @@ const SalesOrdersPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Right Search Drawer */}
+      <SearchDrawer
+        isOpen={isSearchDrawerOpen}
+        onClose={() => setIsSearchDrawerOpen(false)}
+        title="Lọc đơn hàng"
+        activeFilterCount={activeFilterCount}
+        onReset={resetFilters}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: '#334155', marginBottom: '0.5rem' }}>
+              Từ khóa tìm kiếm
+            </label>
+            <input
+              type="text"
+              placeholder="Mã đơn hàng, tên KH, SĐT..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.6rem 0.85rem',
+                borderRadius: '0.375rem',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.875rem',
+                outline: 'none'
+              }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: '#334155', marginBottom: '0.5rem' }}>
+              Trạng thái đơn hàng
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.6rem 0.85rem',
+                borderRadius: '0.375rem',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.875rem',
+                outline: 'none',
+                backgroundColor: 'white'
+              }}
+            >
+              <option value="ALL">-- Tất cả trạng thái --</option>
+              <option value="PENDING">Chờ xử lý</option>
+              <option value="COMPLETED">Đã hoàn thành</option>
+              <option value="CANCELLED">Đã hủy</option>
+              <option value="DRAFT">Bản nháp</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: '#334155', marginBottom: '0.5rem' }}>
+              Hình thức thanh toán
+            </label>
+            <select
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.6rem 0.85rem',
+                borderRadius: '0.375rem',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.875rem',
+                outline: 'none',
+                backgroundColor: 'white'
+              }}
+            >
+              <option value="ALL">-- Tất cả hình thức --</option>
+              <option value="CASH">Tiền mặt</option>
+              <option value="TRANSFER">Chuyển khoản</option>
+              <option value="CARD">Quẹt thẻ</option>
+            </select>
+          </div>
+        </div>
+      </SearchDrawer>
 
     </div>
   );

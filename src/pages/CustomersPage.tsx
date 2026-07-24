@@ -15,7 +15,8 @@ import {
   Loader2,
   X,
   CheckCircle2,
-  XCircle
+  XCircle,
+  SlidersHorizontal
 } from 'lucide-react';
 import { getCustomers, searchCustomers, createCustomer, updateCustomer, deleteCustomer, importCustomersExcel, type Customer } from '../api/customers';
 import { type PaginatedResponse } from '../api/client';
@@ -23,6 +24,7 @@ import { useBranchContext } from '../context/BranchContext';
 import Pagination from '../components/Pagination';
 import CustomerModal from '../components/CustomerModal';
 import CustomerDetailsModal from '../components/CustomerDetailsModal';
+import SearchDrawer from '../components/SearchDrawer';
 import { useTranslation } from 'react-i18next';
 import * as XLSX from 'xlsx';
 
@@ -45,6 +47,21 @@ const CustomersPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const { selectedBranchId } = useBranchContext();
+
+  // Right Search Drawer state
+  const [isSearchDrawerOpen, setIsSearchDrawerOpen] = useState(false);
+  const [customerTypeFilter, setCustomerTypeFilter] = useState('');
+  const [addressFilter, setAddressFilter] = useState('');
+  const [phoneFilter, setPhoneFilter] = useState('');
+
+  const activeFilterCount = (searchTerm ? 1 : 0) + (customerTypeFilter ? 1 : 0) + (addressFilter ? 1 : 0) + (phoneFilter ? 1 : 0);
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setCustomerTypeFilter('');
+    setAddressFilter('');
+    setPhoneFilter('');
+  };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | undefined>();
@@ -72,7 +89,13 @@ const CustomersPage: React.FC = () => {
     },
   });
 
-  const customers = paginatedData?.data || [];
+  const rawCustomers = paginatedData?.data || [];
+  const customers = rawCustomers.filter((c: Customer) => {
+    const matchesType = !customerTypeFilter || c.customerType === customerTypeFilter;
+    const matchesAddress = !addressFilter || (c.address && c.address.toLowerCase().includes(addressFilter.toLowerCase()));
+    const matchesPhone = !phoneFilter || (c.phone && c.phone.includes(phoneFilter)) || (c.email && c.email.toLowerCase().includes(phoneFilter.toLowerCase()));
+    return matchesType && matchesAddress && matchesPhone;
+  });
   const meta = paginatedData?.meta;
 
   // Reset page when search term or branch changes
@@ -175,15 +198,15 @@ const CustomersPage: React.FC = () => {
   const totalInvalid = previewRows.length - totalValid;
 
   return (
-    <div>
+    <div style={{ paddingTop: '0.25rem' }}>
       {/* Header section with buttons */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.875rem', marginBottom: '0.25rem' }}>{t('customers.title')}</h1>
-          <p style={{ color: '#64748b' }}>{t('customers.subtitle')}</p>
+          <h1 style={{ fontSize: '1.25rem', fontWeight: '700', margin: 0 }}>{t('customers.title')}</h1>
+          <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0, marginTop: '0.1rem' }}>{t('customers.subtitle')}</p>
         </div>
         
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {/* Hidden File Input */}
           <input 
             type="file" 
@@ -192,40 +215,9 @@ const CustomersPage: React.FC = () => {
             onChange={handleImportExcel} 
             style={{ display: 'none' }} 
           />
-          <button 
-            onClick={() => fileInputRef.current?.click()} 
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.5rem', 
-              backgroundColor: '#f1f5f9',
-              border: '1px solid #cbd5e1',
-              color: '#334155',
-              cursor: 'pointer',
-              padding: '0.5rem 1.1rem',
-              borderRadius: 'var(--radius)',
-              fontWeight: '600',
-              transition: 'background-color 0.2s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
-            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-          >
-            <FileSpreadsheet size={18} color="#10b981" />
-            Nhập từ Excel
-          </button>
 
-          <button className="btn-primary" onClick={handleAdd} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Plus size={18} />
-            {t('customers.add_new')}
-          </button>
-        </div>
-      </div>
-
-      {/* Main Customers table card */}
-      <div className="card" style={{ padding: '0' }}>
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', gap: '1rem' }}>
-          <div style={{ position: 'relative', flex: 1 }}>
-            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+          <div style={{ position: 'relative', width: '260px' }}>
+            <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
             <input 
               type="text" 
               placeholder={t('customers.search_placeholder')} 
@@ -233,14 +225,84 @@ const CustomersPage: React.FC = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
                 width: '100%',
-                padding: '0.6rem 1rem 0.6rem 2.5rem',
-                borderRadius: 'var(--radius)',
-                border: '1px solid var(--border)',
-                outline: 'none'
+                padding: '0.45rem 0.85rem 0.45rem 2.2rem',
+                borderRadius: '0.375rem',
+                border: '1px solid #cbd5e1',
+                outline: 'none',
+                fontSize: '0.85rem',
+                backgroundColor: '#ffffff',
               }}
             />
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsSearchDrawerOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              backgroundColor: '#ffffff',
+              border: '1px solid #cbd5e1',
+              color: '#334155',
+              cursor: 'pointer',
+              padding: '0.45rem 0.85rem',
+              fontSize: '0.85rem',
+              borderRadius: '0.375rem',
+              fontWeight: '600',
+              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+            }}
+          >
+            <SlidersHorizontal size={16} color="#6366f1" />
+            Menu tìm kiếm
+            {activeFilterCount > 0 && (
+              <span
+                style={{
+                  backgroundColor: '#6366f1',
+                  color: '#ffffff',
+                  borderRadius: '9999px',
+                  padding: '0.05rem 0.4rem',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                }}
+              >
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          <button 
+            onClick={() => fileInputRef.current?.click()} 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.4rem', 
+              backgroundColor: '#f1f5f9',
+              border: '1px solid #cbd5e1',
+              color: '#334155',
+              cursor: 'pointer',
+              padding: '0.45rem 0.85rem',
+              fontSize: '0.85rem',
+              borderRadius: '0.375rem',
+              fontWeight: '600',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#e2e8f0'}
+            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+          >
+            <FileSpreadsheet size={16} color="#10b981" />
+            Nhập từ Excel
+          </button>
+
+          <button className="btn-primary" onClick={handleAdd} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.95rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}>
+            <Plus size={16} />
+            {t('customers.add_new')}
+          </button>
         </div>
+      </div>
+
+      {/* Main Customers table card */}
+      <div className="card" style={{ padding: '0' }}>
 
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
@@ -563,6 +625,101 @@ const CustomersPage: React.FC = () => {
         </div>
       )}
 
+      {/* Right Search Drawer */}
+      <SearchDrawer
+        isOpen={isSearchDrawerOpen}
+        onClose={() => setIsSearchDrawerOpen(false)}
+        title="Tìm kiếm khách hàng"
+        subtitle="Lọc thông tin khách hàng theo từ khóa, địa chỉ, loại khách"
+        activeFilterCount={activeFilterCount}
+        onReset={resetFilters}
+        onApply={() => setIsSearchDrawerOpen(false)}
+      >
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Từ khóa tìm kiếm
+          </label>
+          <input
+            type="text"
+            placeholder="Tên, mã KH, SĐT, Email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Loại khách hàng
+          </label>
+          <select
+            value={customerTypeFilter}
+            onChange={(e) => setCustomerTypeFilter(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              backgroundColor: '#ffffff',
+              outline: 'none',
+            }}
+          >
+            <option value="">-- Tất cả loại khách --</option>
+            <option value="Khách lẻ">Khách lẻ</option>
+            <option value="Cá nhân">Cá nhân</option>
+            <option value="Doanh nghiệp">Doanh nghiệp</option>
+            <option value="Đại lý">Đại lý</option>
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Số điện thoại / Email
+          </label>
+          <input
+            type="text"
+            placeholder="Tìm theo SĐT hoặc Email..."
+            value={phoneFilter}
+            onChange={(e) => setPhoneFilter(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Địa chỉ
+          </label>
+          <input
+            type="text"
+            placeholder="Nhập địa chỉ..."
+            value={addressFilter}
+            onChange={(e) => setAddressFilter(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              outline: 'none',
+            }}
+          />
+        </div>
+      </SearchDrawer>
     </div>
   );
 };

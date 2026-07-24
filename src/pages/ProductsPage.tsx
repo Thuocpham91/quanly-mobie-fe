@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, Edit2, Trash2, Box, Layers, Tag, Ruler } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Box, Layers, Tag, Ruler, SlidersHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { type PaginatedResponse } from '../api/client';
 import { 
@@ -13,6 +13,7 @@ import {
 } from '../api/inventory';
 import Pagination from '../components/Pagination';
 import ProductModal from '../components/ProductModal';
+import SearchDrawer from '../components/SearchDrawer';
 import { useBranchContext } from '../context/BranchContext';
 
 const ProductsPage: React.FC = () => {
@@ -22,6 +23,13 @@ const ProductsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'units' | 'groups'>('products');
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
+
+  // Search Drawer state & filters
+  const [isSearchDrawerOpen, setIsSearchDrawerOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedUnit, setSelectedUnit] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState('');
+  const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'out_of_stock'>('all');
 
   // Modals state
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -105,29 +113,112 @@ const ProductsPage: React.FC = () => {
     }
   };
 
-  const filteredProducts = products.filter((p: any) => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    (p.barcode && p.barcode.includes(searchTerm)) ||
-    (p.productCode && p.productCode.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const activeFilterCount = (selectedCategory ? 1 : 0) + (selectedUnit ? 1 : 0) + (selectedGroup ? 1 : 0) + (stockFilter !== 'all' ? 1 : 0) + (searchTerm ? 1 : 0);
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setSelectedCategory('');
+    setSelectedUnit('');
+    setSelectedGroup('');
+    setStockFilter('all');
+  };
+
+  const filteredProducts = products.filter((p: any) => {
+    const q = searchTerm.toLowerCase().trim();
+    const matchesSearch =
+      !q ||
+      p.name?.toLowerCase().includes(q) ||
+      (p.barcode && p.barcode.includes(q)) ||
+      (p.productCode && p.productCode.toLowerCase().includes(q));
+
+    const matchesCategory = !selectedCategory || p.categoryId === selectedCategory || p.category?.id === selectedCategory;
+    const matchesUnit = !selectedUnit || p.unitId === selectedUnit || p.unit?.id === selectedUnit;
+    const matchesGroup = !selectedGroup || p.groupId === selectedGroup || p.group?.id === selectedGroup;
+
+    const currentStock = stockMap[p.id] || 0;
+    const matchesStock =
+      stockFilter === 'all' ? true :
+      stockFilter === 'in_stock' ? currentStock > 0 :
+      stockFilter === 'out_of_stock' ? currentStock <= 0 : true;
+
+    return matchesSearch && matchesCategory && matchesUnit && matchesGroup && matchesStock;
+  });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '1.5rem', backgroundColor: '#f8fafc', gap: '1.5rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '0.25rem 0.5rem', backgroundColor: '#f8fafc', gap: '0.75rem' }}>
       
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ fontSize: '1.875rem', fontWeight: '700', color: '#1e293b' }}>{t('products.title')}</h1>
-          <p style={{ color: '#64748b', marginTop: '0.25rem' }}>{t('products.subtitle')}</p>
+          <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1e293b', margin: 0 }}>{t('products.title')}</h1>
+          <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0, marginTop: '0.1rem' }}>{t('products.subtitle')}</p>
         </div>
-        <button 
-          className="btn-primary" 
-          onClick={() => { setEditingProduct(undefined); setIsProductModalOpen(true); }}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem' }}
-        >
-          <Plus size={20} />
-          {t('products.add_new')}
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <div style={{ position: 'relative', width: '260px' }}>
+            <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            <input 
+              type="text" 
+              placeholder={t('products.search_placeholder')} 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.45rem 0.85rem 0.45rem 2.2rem',
+                borderRadius: '0.375rem',
+                border: '1px solid #cbd5e1',
+                outline: 'none',
+                fontSize: '0.85rem',
+                backgroundColor: '#ffffff',
+              }}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsSearchDrawerOpen(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.45rem 0.85rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              backgroundColor: '#ffffff',
+              color: '#334155',
+              fontWeight: 600,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+              transition: 'all 0.2s',
+            }}
+          >
+            <SlidersHorizontal size={16} style={{ color: '#6366f1' }} />
+            <span>Menu tìm kiếm</span>
+            {activeFilterCount > 0 && (
+              <span
+                style={{
+                  backgroundColor: '#6366f1',
+                  color: '#ffffff',
+                  borderRadius: '9999px',
+                  padding: '0.05rem 0.4rem',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                }}
+              >
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          <button 
+            className="btn-primary" 
+            onClick={() => { setEditingProduct(undefined); setIsProductModalOpen(true); }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.95rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
+          >
+            <Plus size={16} />
+            {t('products.add_new')}
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -136,23 +227,6 @@ const ProductsPage: React.FC = () => {
         <TabItem active={activeTab === 'categories'} onClick={() => setActiveTab('categories')} icon={<Layers size={18} />} label={t('products.tab_categories')} />
         <TabItem active={activeTab === 'units'} onClick={() => setActiveTab('units')} icon={<Ruler size={18} />} label={t('products.tab_units')} />
         <TabItem active={activeTab === 'groups'} onClick={() => setActiveTab('groups')} icon={<Tag size={18} />} label={t('products.tab_groups')} />
-      </div>
-
-      {/* Search & Actions */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-          <input 
-            type="text" 
-            placeholder={t('products.search_placeholder')} 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              width: '100%', padding: '0.6rem 1rem 0.6rem 2.5rem',
-              borderRadius: '0.5rem', border: '1px solid #e2e8f0', outline: 'none'
-            }}
-          />
-        </div>
       </div>
 
       {/* Content Table */}
@@ -279,6 +353,138 @@ const ProductsPage: React.FC = () => {
           }}
         />
       )}
+
+      {/* Right Search Drawer */}
+      <SearchDrawer
+        isOpen={isSearchDrawerOpen}
+        onClose={() => setIsSearchDrawerOpen(false)}
+        title="Tìm kiếm sản phẩm"
+        subtitle="Lọc sản phẩm theo danh mục, đơn vị và tồn kho"
+        activeFilterCount={activeFilterCount}
+        onReset={resetFilters}
+        onApply={() => setIsSearchDrawerOpen(false)}
+      >
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Từ khóa tìm kiếm
+          </label>
+          <input
+            type="text"
+            placeholder="Tên, mã SP, mã vạch..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Danh mục sản phẩm
+          </label>
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              backgroundColor: '#ffffff',
+              outline: 'none',
+            }}
+          >
+            <option value="">-- Tất cả danh mục --</option>
+            {categories.map((c: any) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Đơn vị tính
+          </label>
+          <select
+            value={selectedUnit}
+            onChange={(e) => setSelectedUnit(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              backgroundColor: '#ffffff',
+              outline: 'none',
+            }}
+          >
+            <option value="">-- Tất cả đơn vị --</option>
+            {units.map((u: any) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Nhóm hàng
+          </label>
+          <select
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              backgroundColor: '#ffffff',
+              outline: 'none',
+            }}
+          >
+            <option value="">-- Tất cả nhóm hàng --</option>
+            {groups.map((g: any) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Tình trạng tồn kho
+          </label>
+          <select
+            value={stockFilter}
+            onChange={(e: any) => setStockFilter(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              backgroundColor: '#ffffff',
+              outline: 'none',
+            }}
+          >
+            <option value="all">Tất cả</option>
+            <option value="in_stock">Còn hàng trong kho (&gt; 0)</option>
+            <option value="out_of_stock">Hết hàng (0)</option>
+          </select>
+        </div>
+      </SearchDrawer>
     </div>
   );
 };

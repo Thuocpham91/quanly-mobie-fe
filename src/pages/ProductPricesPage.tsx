@@ -45,10 +45,12 @@ const ProductPricesPage: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const { data: products = [], isLoading: loadingProducts } = useQuery({
-    queryKey: ['products'],
-    queryFn: () => inventoryApi.getProducts(),
+  const { data: paginatedProducts, isLoading: loadingProducts } = useQuery({
+    queryKey: ['products50', searchTerm],
+    queryFn: () => inventoryApi.getProductsPaginated(1, 50, undefined, searchTerm.trim() || undefined),
   });
+
+  const products: Product[] = paginatedProducts?.data || (Array.isArray(paginatedProducts) ? paginatedProducts : []);
 
   const { data: branchesData } = useQuery({
     queryKey: ['branches'],
@@ -57,13 +59,11 @@ const ProductPricesPage: React.FC = () => {
 
   const branches = branchesData?.data || [];
 
-  
-
   const updateProductMutation = useMutation({
     mutationFn: (data: { id: string, basePrice: number }) => 
       inventoryApi.updateProduct(data.id, { basePrice: data.basePrice }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products50'] });
     }
   });
 
@@ -71,7 +71,7 @@ const ProductPricesPage: React.FC = () => {
     mutationFn: (data: { productId: string, branchId: string, price: number }) => 
       inventoryApi.setProductBranchPrice(data.productId, data.branchId, data.price),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products50'] });
     }
   });
 
@@ -79,14 +79,14 @@ const ProductPricesPage: React.FC = () => {
     mutationFn: (data: { productId: string, branchId: string }) => 
       inventoryApi.deleteProductBranchPrice(data.productId, data.branchId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['products50'] });
     }
   });
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (p.productCode && p.productCode.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  ).slice(0, 50);
 
   const handleSelectProduct = (product: Product) => {
     setSelectedProduct(product);
@@ -142,35 +142,38 @@ const ProductPricesPage: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: isMobile ? '1rem' : '1.5rem', backgroundColor: 'var(--background)', gap: '1.5rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '0.25rem 0.5rem', backgroundColor: 'var(--background)', gap: '0.75rem' }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
         <div>
-          <h1 style={{ fontSize: isMobile ? '1.5rem' : '1.875rem', fontWeight: '700', color: 'var(--foreground)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <DollarSign style={{ color: 'var(--primary)' }} />
+          <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--foreground)', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+            <DollarSign size={20} style={{ color: 'var(--primary)' }} />
             Quản lý giá sản phẩm
           </h1>
-          <p style={{ color: '#64748b', marginTop: '0.25rem', fontSize: isMobile ? '0.875rem' : '1rem' }}>Cài đặt giá mặc định và giá riêng cho từng chi nhánh</p>
+          <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0, marginTop: '0.1rem' }}>Cài đặt giá mặc định và giá riêng cho từng chi nhánh</p>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '1.5rem', flex: 1, overflow: isMobile ? 'auto' : 'hidden' }}>
+      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '1rem', flex: 1, overflow: isMobile ? 'auto' : 'hidden' }}>
         
         {/* Product List */}
         <div className="card" style={{ flex: isMobile ? 'none' : '0 0 350px', height: isMobile ? '400px' : 'auto', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
-          <div style={{ padding: '1rem', borderBottom: '1px solid var(--border)', backgroundColor: '#f8fafc' }}>
+          <div style={{ padding: '0.75rem', borderBottom: '1px solid var(--border)', backgroundColor: '#f8fafc' }}>
             <div style={{ position: 'relative' }}>
-              <Search style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} size={18} />
+              <Search style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} size={16} />
               <input
                 type="text"
                 placeholder="Tìm kiếm sản phẩm..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{
-                  width: '100%', padding: '0.6rem 1rem 0.6rem 2.5rem',
-                  borderRadius: 'var(--radius)', border: '1px solid var(--border)', outline: 'none'
+                  width: '100%', padding: '0.45rem 0.85rem 0.45rem 2.2rem',
+                  borderRadius: '0.375rem', border: '1px solid #cbd5e1', outline: 'none', fontSize: '0.85rem'
                 }}
               />
+            </div>
+            <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.35rem', textAlign: 'right' }}>
+              Hiển thị tối đa 50 sản phẩm
             </div>
           </div>
           

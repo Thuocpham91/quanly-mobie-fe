@@ -460,23 +460,7 @@ const DashboardLayout: React.FC = () => {
               <Menu size={20} />
             </button>
             
-            {!isMobile && (
-              <div style={{ position: 'relative', width: '300px' }}>
-                <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                <input 
-                  type="text" 
-                  placeholder={t('common.search_placeholder')}
-                  style={{
-                    width: '100%',
-                    padding: '0.6rem 1rem 0.6rem 2.5rem',
-                    borderRadius: '2rem',
-                    border: '1px solid var(--border)',
-                    backgroundColor: 'var(--background)',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-            )}
+            {/* Removed top global search input per user request */}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
@@ -671,7 +655,7 @@ const DashboardLayout: React.FC = () => {
         </header>
 
         {/* Content Area */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '1rem' : '2rem' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: isMobile ? '0.75rem' : '1rem 1.25rem' }}>
           <Outlet />
         </div>
 

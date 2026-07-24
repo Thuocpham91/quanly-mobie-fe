@@ -125,12 +125,15 @@ export const getProducts = async (context?: any): Promise<Product[]> => {
   return response.data?.data || response.data || [];
 };
 
-export const getProductsPaginated = async (page = 1, limit = 10, isService?: boolean) => {
+export const getProductsPaginated = async (page = 1, limit = 10, isService?: boolean, search?: string) => {
   const query = new URLSearchParams();
   query.append('page', String(page));
   query.append('limit', String(limit));
   if (isService !== undefined) {
     query.append('isService', String(isService));
+  }
+  if (search) {
+    query.append('search', search);
   }
   const url = `/products?${query.toString()}`;
   const response = await client.get<any>(url);
@@ -441,6 +444,7 @@ export const deleteImportOrder = async (id: string): Promise<void> => {
 
 export default {
   getProducts,
+  getProductsPaginated,
   createProduct,
   updateProduct,
   deleteProduct,

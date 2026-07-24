@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Search, Plus, ArrowLeft, Trash2, Save, FileSpreadsheet, 
   Edit2, Calendar, Building2, FileText, User,
-  Wallet, TicketPercent, Truck, Banknote
+  Wallet, TicketPercent, Truck, Banknote, SlidersHorizontal
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { 
@@ -20,6 +20,7 @@ import * as XLSX from 'xlsx';
 import ProductModal from '../components/ProductModal';
 import ProductPickerModal from '../components/ProductPickerModal';
 import EditItemModal from '../components/EditItemModal';
+import SearchDrawer from '../components/SearchDrawer';
 
 
 interface ImportItem {
@@ -133,6 +134,7 @@ const InventoryImportPage: React.FC = () => {
   const [uploadResult, setUploadResult] = useState<any>(null);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const importFileRef = useRef<HTMLInputElement | null>(null);
+  const [showMainInfoOnMobile, setShowMainInfoOnMobile] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -170,6 +172,19 @@ const InventoryImportPage: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isPickerModalOpen, setIsPickerModalOpen] = useState(false);
+
+  // Right Search Drawer state
+  const [isSearchDrawerOpen, setIsSearchDrawerOpen] = useState(false);
+  const [drawerProductSearch, setDrawerProductSearch] = useState('');
+  const [drawerCategoryFilter, setDrawerCategoryFilter] = useState('');
+
+  const activeFilterCount = (productSearch ? 1 : 0) + (drawerProductSearch ? 1 : 0) + (drawerCategoryFilter ? 1 : 0);
+
+  const resetFilters = () => {
+    setProductSearch('');
+    setDrawerProductSearch('');
+    setDrawerCategoryFilter('');
+  };
 
   // Fetch Data
   const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: getProducts });
@@ -399,12 +414,12 @@ const InventoryImportPage: React.FC = () => {
 
   return (
     <div style={{ 
-      padding: isMobile ? '1rem' : '1.5rem', 
+      padding: isMobile ? '0.5rem' : '0.25rem 0.5rem', 
       backgroundColor: '#f1f5f9', 
       minHeight: '100%', 
       display: 'flex', 
       flexDirection: 'column', 
-      gap: isMobile ? '1rem' : '1.5rem' 
+      gap: '0.75rem' 
     }}>
       
       {isLoadingBatch && (
@@ -417,22 +432,22 @@ const InventoryImportPage: React.FC = () => {
         flexDirection: isMobile ? 'column' : 'row', 
         justifyContent: 'space-between', 
         alignItems: isMobile ? 'flex-start' : 'center',
-        gap: '1rem'
+        gap: '0.75rem'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <button 
             onClick={() => navigate('/admin/inventory')}
-            style={{ padding: '0.5rem', borderRadius: '50%', border: 'none', backgroundColor: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
+            style={{ padding: '0.4rem', borderRadius: '50%', border: 'none', backgroundColor: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}
           >
-            <ArrowLeft size={20} color="#64748b" />
+            <ArrowLeft size={18} color="#64748b" />
           </button>
-          <h1 style={{ fontSize: isMobile ? '1.25rem' : '1.5rem', fontWeight: '700', color: '#1e293b' }}>
+          <h1 style={{ fontSize: isMobile ? '1.15rem' : '1.25rem', fontWeight: '700', color: '#1e293b', margin: 0 }}>
             {editId ? 'Chỉnh sửa lô hàng' : 'Nhập kho hàng hóa'}
           </h1>
         </div>
         <div style={{ 
           display: 'flex', 
-          gap: '0.5rem', 
+          gap: '0.4rem', 
           width: isMobile ? '100%' : 'auto',
           overflowX: isMobile ? 'auto' : 'visible',
           paddingBottom: isMobile ? '0.5rem' : '0'
@@ -445,12 +460,36 @@ const InventoryImportPage: React.FC = () => {
             onChange={handleImportExcel}
             ref={importFileRef}
           />
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setIsSearchDrawerOpen(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap', flex: isMobile ? 1 : 'none', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
+          >
+            <SlidersHorizontal size={16} style={{ color: '#6366f1' }} />
+            {!isMobile && 'Menu tìm kiếm'}
+            {isMobile && 'Tìm kiếm'}
+            {activeFilterCount > 0 && (
+              <span
+                style={{
+                  backgroundColor: '#6366f1',
+                  color: '#ffffff',
+                  borderRadius: '9999px',
+                  padding: '0.05rem 0.4rem',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                }}
+              >
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
           <button 
             className="btn-secondary" 
             onClick={downloadSampleExcel}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', flex: isMobile ? 1 : 'none' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap', flex: isMobile ? 1 : 'none', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
           >
-            <FileSpreadsheet size={18} />
+            <FileSpreadsheet size={16} />
             {!isMobile && (t('inventory.download_sample') || 'Tải file mẫu')}
             {isMobile && 'Mẫu'}
           </button>
@@ -458,9 +497,9 @@ const InventoryImportPage: React.FC = () => {
             className="btn-secondary" 
             onClick={() => importFileRef.current?.click()}
             disabled={isProcessingUpload}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', flex: isMobile ? 1 : 'none', opacity: isProcessingUpload ? 0.6 : 1, cursor: isProcessingUpload ? 'not-allowed' : 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap', flex: isMobile ? 1 : 'none', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem', opacity: isProcessingUpload ? 0.6 : 1, cursor: isProcessingUpload ? 'not-allowed' : 'pointer' }}
           >
-            <FileSpreadsheet size={18} />
+            <FileSpreadsheet size={16} />
             {!isMobile && (isProcessingUpload ? 'Đang upload...' : (t('inventory.import_excel') || 'Nhập excel'))}
             {isMobile && (isProcessingUpload ? 'Đang...' : 'Import')}
           </button>
@@ -468,9 +507,9 @@ const InventoryImportPage: React.FC = () => {
             className="btn-primary" 
             onClick={handleSave} 
             disabled={importMutation.isPending || updateMutation.isPending || items.length === 0} 
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', whiteSpace: 'nowrap', flex: isMobile ? 1 : 'none' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap', flex: isMobile ? 1 : 'none', padding: '0.45rem 0.95rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
           >
-            <Save size={18} />
+            <Save size={16} />
             {(importMutation.isPending || updateMutation.isPending) ? '...' : (isMobile ? (editId ? 'Cập nhật' : 'Lưu') : (editId ? 'Cập nhật lô hàng' : 'Lưu (F10)'))}
           </button>
         </div>
@@ -486,170 +525,202 @@ const InventoryImportPage: React.FC = () => {
         </div>
       )}
 
-      <div className="card" style={{ padding: '1.5rem', marginBottom: '1.5rem', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)', overflow: 'visible' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)', gap: '1.25rem' }}>
-          
-          <div className="form-group">
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem', fontSize: '0.85rem', fontWeight: '700', color: '#64748b' }}>
-              <Calendar size={16} className="text-primary" />
-              Ngày nhập <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <input 
-              type="date" 
-              value={importDate} 
-              onChange={(e) => setImportDate(e.target.value)}
-              className="form-control"
-              style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.9rem', outline: 'none', transition: 'border-color 0.2s' }}
-            />
+      {/* Mobile Toggle Button */}
+      {isMobile && (
+        <button
+          type="button"
+          onClick={() => setShowMainInfoOnMobile(!showMainInfoOnMobile)}
+          style={{
+            width: '100%',
+            padding: '0.6rem 1rem',
+            borderRadius: '0.5rem',
+            backgroundColor: '#ffffff',
+            border: '1px solid #cbd5e1',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontWeight: '600',
+            fontSize: '0.85rem',
+            color: '#334155',
+            marginBottom: showMainInfoOnMobile ? '0.5rem' : '1rem',
+            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+            cursor: 'pointer'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Building2 size={16} color="#6366f1" />
+            <span>Thông tin phiếu nhập {distributorSearch ? `(${distributorSearch})` : ''}</span>
           </div>
+          <span style={{ fontSize: '0.75rem', color: '#6366f1', fontWeight: 700 }}>
+            {showMainInfoOnMobile ? 'Ẩn ▲' : 'Hiện ▼'}
+          </span>
+        </button>
+      )}
 
-          <div className="form-group" style={{ position: 'relative' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem', fontSize: '0.85rem', fontWeight: '700', color: '#64748b' }}>
-              <Building2 size={16} className="text-primary" />
-              Nhà phân phối
-            </label>
-            <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <div style={{ flex: 1, position: 'relative' }}>
-                <input
-                  type="text"
-                  placeholder="Gõ tên để tìm nhà phân phối..."
-                  value={distributorSearch}
-                  onChange={(e) => {
-                    setDistributorSearch(e.target.value);
-                    setShowDistributorDropdown(true);
-                    // Clear selection if user clears input
-                    if (!e.target.value) setDistributorId('');
-                  }}
-                  onFocus={() => setShowDistributorDropdown(true)}
-                  onBlur={() => setTimeout(() => setShowDistributorDropdown(false), 150)}
-                  className="form-control"
-                  style={{ width: '100%', padding: '0.6rem 2rem 0.6rem 0.8rem', borderRadius: '0.5rem', border: `1px solid ${distributorId ? '#10b981' : '#cbd5e1'}`, fontSize: '0.9rem', outline: 'none', backgroundColor: distributorId ? '#f0fdf4' : 'white' }}
-                />
-                {distributorId && (
-                  <button
-                    type="button"
-                    onClick={() => { setDistributorId(''); setDistributorSearch(''); }}
-                    style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '1rem', lineHeight: 1, padding: '0.1rem' }}
-                    title="Xóa lựa chọn"
-                  >
-                    ×
-                  </button>
-                )}
-                {showDistributorDropdown && (
-                  <div style={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
-                    backgroundColor: 'white', borderRadius: '0.5rem',
-                    boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)',
-                    marginTop: '0.25rem', border: '1px solid #e2e8f0',
-                    maxHeight: '200px', overflowY: 'auto'
-                  }}>
-                    {distributors
-                      .filter((d: any) =>
+      {(!isMobile || showMainInfoOnMobile) && (
+        <div className="card" style={{ padding: isMobile ? '0.75rem' : '0.75rem 1.25rem', marginBottom: '0.6rem', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)', overflow: 'visible' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)', gap: '0.75rem' }}>
+            
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem', fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>
+                <Calendar size={14} className="text-primary" />
+                Ngày nhập <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input 
+                type="date" 
+                value={importDate} 
+                onChange={(e) => setImportDate(e.target.value)}
+                className="form-control"
+                style={{ width: '100%', padding: '0.4rem 0.75rem', borderRadius: '0.375rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', outline: 'none' }}
+              />
+            </div>
+
+            <div className="form-group" style={{ position: 'relative' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem', fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>
+                <Building2 size={14} className="text-primary" />
+                Nhà phân phối
+              </label>
+              <div style={{ display: 'flex', gap: '0.35rem' }}>
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <input
+                    type="text"
+                    placeholder="Gõ tên để tìm nhà phân phối..."
+                    value={distributorSearch}
+                    onChange={(e) => {
+                      setDistributorSearch(e.target.value);
+                      setShowDistributorDropdown(true);
+                      if (!e.target.value) setDistributorId('');
+                    }}
+                    onFocus={() => setShowDistributorDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowDistributorDropdown(false), 150)}
+                    className="form-control"
+                    style={{ width: '100%', padding: '0.4rem 1.8rem 0.4rem 0.75rem', borderRadius: '0.375rem', border: `1px solid ${distributorId ? '#10b981' : '#cbd5e1'}`, fontSize: '0.85rem', outline: 'none', backgroundColor: distributorId ? '#f0fdf4' : 'white' }}
+                  />
+                  {distributorId && (
+                    <button
+                      type="button"
+                      onClick={() => { setDistributorId(''); setDistributorSearch(''); }}
+                      style={{ position: 'absolute', right: '0.4rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: '0.9rem', lineHeight: 1, padding: '0.1rem' }}
+                      title="Xóa lựa chọn"
+                    >
+                      ×
+                    </button>
+                  )}
+                  {showDistributorDropdown && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
+                      backgroundColor: 'white', borderRadius: '0.375rem',
+                      boxShadow: '0 10px 25px -5px rgba(0,0,0,0.15)',
+                      marginTop: '0.25rem', border: '1px solid #e2e8f0',
+                      maxHeight: '200px', overflowY: 'auto'
+                    }}>
+                      {distributors
+                        .filter((d: any) =>
+                          !distributorSearch ||
+                          d.name.toLowerCase().includes(distributorSearch.toLowerCase()) ||
+                          (d.phone && d.phone.includes(distributorSearch))
+                        )
+                        .map((d: any) => (
+                          <div
+                            key={d.id}
+                            onMouseDown={() => {
+                              setDistributorId(d.id);
+                              setDistributorSearch(d.name);
+                              setShowDistributorDropdown(false);
+                            }}
+                            style={{
+                              padding: '0.5rem 0.75rem',
+                              cursor: 'pointer',
+                              backgroundColor: d.id === distributorId ? '#eff6ff' : 'white',
+                              borderBottom: '1px solid #f1f5f9',
+                              display: 'flex', flexDirection: 'column', gap: '0.1rem'
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = d.id === distributorId ? '#eff6ff' : 'white')}
+                          >
+                            <span style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.85rem' }}>{d.name}</span>
+                            {d.phone && <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{d.phone}</span>}
+                          </div>
+                        ))
+                      }
+                      {distributors.filter((d: any) =>
                         !distributorSearch ||
                         d.name.toLowerCase().includes(distributorSearch.toLowerCase()) ||
                         (d.phone && d.phone.includes(distributorSearch))
-                      )
-                      .map((d: any) => (
-                        <div
-                          key={d.id}
-                          onMouseDown={() => {
-                            setDistributorId(d.id);
-                            setDistributorSearch(d.name);
-                            setShowDistributorDropdown(false);
-                          }}
-                          style={{
-                            padding: '0.6rem 0.9rem',
-                            cursor: 'pointer',
-                            backgroundColor: d.id === distributorId ? '#eff6ff' : 'white',
-                            borderBottom: '1px solid #f1f5f9',
-                            display: 'flex', flexDirection: 'column', gap: '0.1rem'
-                          }}
-                          onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8fafc')}
-                          onMouseLeave={e => (e.currentTarget.style.backgroundColor = d.id === distributorId ? '#eff6ff' : 'white')}
-                        >
-                          <span style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.875rem' }}>{d.name}</span>
-                          {d.phone && <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{d.phone}</span>}
-                        </div>
-                      ))
-                    }
-                    {distributors.filter((d: any) =>
-                      !distributorSearch ||
-                      d.name.toLowerCase().includes(distributorSearch.toLowerCase()) ||
-                      (d.phone && d.phone.includes(distributorSearch))
-                    ).length === 0 && (
-                      <div style={{ padding: '0.75rem 0.9rem', color: '#94a3b8', fontSize: '0.875rem', textAlign: 'center' }}>Không tìm thấy</div>
-                    )}
-                  </div>
-                )}
+                      ).length === 0 && (
+                        <div style={{ padding: '0.6rem 0.75rem', color: '#94a3b8', fontSize: '0.85rem', textAlign: 'center' }}>Không tìm thấy</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <button className="btn-secondary" style={{ padding: '0 0.5rem', borderRadius: '0.375rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Thêm nhà phân phối">
+                  <Plus size={16} />
+                </button>
               </div>
-              <button className="btn-secondary" style={{ padding: '0 0.6rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Thêm nhà phân phối">
-                <Plus size={18} />
-              </button>
+            </div>
+
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem', fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>
+                <FileText size={14} className="text-primary" />
+                Số hóa đơn
+              </label>
+              <input 
+                type="text" 
+                placeholder="Nhập số hóa đơn..." 
+                value={invoiceName}
+                onChange={(e) => setInvoiceName(e.target.value)}
+                className="form-control"
+                style={{ width: '100%', padding: '0.4rem 0.75rem', borderRadius: '0.375rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', outline: 'none' }}
+              />
+            </div>
+
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem', fontSize: '0.8rem', fontWeight: '600', color: '#475569' }}>
+                <User size={14} className="text-primary" />
+                Người nhập hàng
+              </label>
+              <select 
+                value={personnelId} 
+                onChange={(e) => setPersonnelId(e.target.value)}
+                disabled={!isAdmin}
+                className="form-control"
+                style={{ 
+                  width: '100%', padding: '0.4rem 0.75rem', borderRadius: '0.375rem', border: '1px solid #cbd5e1', fontSize: '0.85rem', outline: 'none', appearance: 'none', 
+                  backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'%2364748b\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'%3E%3C/path%3E%3C/svg%3E")', 
+                  backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.6rem center', backgroundSize: '0.9rem',
+                  backgroundColor: isAdmin ? 'white' : '#f8fafc',
+                  cursor: isAdmin ? 'pointer' : 'not-allowed',
+                  opacity: isAdmin ? 1 : 0.8
+                }}
+              >
+                {!personnelId && <option value="">Chọn người nhập</option>}
+                {personnelId && !users.find(u => u.fullName === personnelId) && (
+                  <option value={personnelId}>{personnelId}</option>
+                )}
+                {users.map(u => (
+                  <option key={u.id} value={u.fullName}>{u.fullName}</option>
+                ))}
+              </select>
             </div>
           </div>
-
-          <div className="form-group">
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem', fontSize: '0.85rem', fontWeight: '700', color: '#64748b' }}>
-              <FileText size={16} className="text-primary" />
-              Số hóa đơn
-            </label>
-            <input 
-              type="text" 
-              placeholder="Nhập số hóa đơn..." 
-              value={invoiceName}
-              onChange={(e) => setInvoiceName(e.target.value)}
-              className="form-control"
-              style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.9rem', outline: 'none' }}
-            />
-          </div>
-
-          <div className="form-group">
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem', fontSize: '0.85rem', fontWeight: '700', color: '#64748b' }}>
-              <User size={16} className="text-primary" />
-              Người nhập hàng
-            </label>
-            <select 
-              value={personnelId} 
-              onChange={(e) => setPersonnelId(e.target.value)}
-              disabled={!isAdmin}
-              className="form-control"
-              style={{ 
-                width: '100%', padding: '0.6rem 0.8rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.9rem', outline: 'none', appearance: 'none', 
-                backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'%2364748b\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'%3E%3C/path%3E%3C/svg%3E")', 
-                backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1rem',
-                backgroundColor: isAdmin ? 'white' : '#f8fafc',
-                cursor: isAdmin ? 'pointer' : 'not-allowed',
-                opacity: isAdmin ? 1 : 0.8
-              }}
-            >
-              {!personnelId && <option value="">Chọn người nhập</option>}
-              {/* Ensure current personnelId is in the list */}
-              {personnelId && !users.find(u => u.fullName === personnelId) && (
-                <option value={personnelId}>{personnelId}</option>
-              )}
-              {users.map(u => (
-                <option key={u.id} value={u.fullName}>{u.fullName}</option>
-              ))}
-            </select>
-          </div>
         </div>
-      </div>
+      )}
 
       {/* Items Section */}
       <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1 }}>
         
         {/* Item Search Area */}
         <div style={{ 
-          padding: '1rem', 
+          padding: '0.6rem 0.85rem', 
           borderBottom: '1px solid #e2e8f0', 
           backgroundColor: '#f8fafc', 
           display: 'flex', 
           flexDirection: isMobile ? 'column' : 'row',
-          gap: '1rem', 
+          gap: '0.75rem', 
           alignItems: isMobile ? 'stretch' : 'center' 
         }}>
-          <div style={{ position: 'relative', flex: 1, maxWidth: isMobile ? '100%' : '600px' }}>
-            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+          <div style={{ position: 'relative', flex: 1, maxWidth: isMobile ? '100%' : '500px' }}>
+            <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
             <input 
               type="text" 
               placeholder={isMobile ? "Tìm hàng hóa..." : "Tìm kiếm theo tên hàng hóa, mã vạch, mã sản phẩm"} 
@@ -660,35 +731,35 @@ const InventoryImportPage: React.FC = () => {
               }}
               onFocus={() => setShowProductResults(true)}
               style={{
-                width: '100%', padding: '0.6rem 1rem 0.6rem 2.5rem',
-                borderRadius: '0.5rem', border: '1px solid #e2e8f0', outline: 'none',
+                width: '100%', padding: '0.42rem 0.75rem 0.42rem 2.2rem',
+                borderRadius: '0.375rem', border: '1px solid #e2e8f0', outline: 'none',
                 backgroundColor: 'white',
-                fontSize: isMobile ? '0.875rem' : '1rem'
+                fontSize: '0.85rem'
               }}
             />
             {showProductResults && productSearch && (
               <div style={{ 
                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-                backgroundColor: 'white', borderRadius: '0.5rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
-                marginTop: '0.5rem', border: '1px solid #e2e8f0',
+                backgroundColor: 'white', borderRadius: '0.375rem', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+                marginTop: '0.35rem', border: '1px solid #e2e8f0',
                 maxHeight: '320px', overflowY: 'auto'
               }}>
                 {filteredProducts.length > 0 ? filteredProducts.map((p: Product) => (
                   <div 
                     key={p.id} 
                     onClick={() => handleAddItem(p)}
-                    style={{ padding: '0.75rem 1rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9' }}
+                    style={{ padding: '0.6rem 0.85rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9' }}
                     onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f8fafc')}
                     onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'white')}
                   >
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: '600', color: '#1e293b', fontSize: isMobile ? '0.875rem' : '1rem' }}>{p.name}</div>
+                      <div style={{ fontWeight: '600', color: '#1e293b', fontSize: '0.85rem' }}>{p.name}</div>
                       <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.barcode || p.productCode || 'N/A'}</div>
                     </div>
-                    <div style={{ color: '#10b981', fontSize: '0.875rem' }}>{p.unit?.name}</div>
+                    <div style={{ color: '#10b981', fontSize: '0.85rem' }}>{p.unit?.name}</div>
                   </div>
                 )) : (
-                  <div style={{ padding: '1rem', textAlign: 'center', color: '#94a3b8' }}>Không tìm thấy sản phẩm</div>
+                  <div style={{ padding: '0.85rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.85rem' }}>Không tìm thấy sản phẩm</div>
                 )}
               </div>
             )}
@@ -698,12 +769,12 @@ const InventoryImportPage: React.FC = () => {
             className="btn-primary" 
             onClick={() => setIsPickerModalOpen(true)}
             style={{ 
-              display: 'flex', alignItems: 'center', gap: '0.5rem', 
-              padding: '0.6rem 1.25rem', backgroundColor: '#10b981', border: 'none',
-              justifyContent: 'center', whiteSpace: 'nowrap'
+              display: 'flex', alignItems: 'center', gap: '0.4rem', 
+              padding: '0.42rem 0.95rem', backgroundColor: '#10b981', border: 'none',
+              justifyContent: 'center', whiteSpace: 'nowrap', fontSize: '0.85rem', borderRadius: '0.375rem'
             }}
           >
-            <Plus size={18} />
+            <Plus size={16} />
             Thêm lẻ sản phẩm
           </button>
         </div>
@@ -772,26 +843,26 @@ const InventoryImportPage: React.FC = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead style={{ backgroundColor: '#10b981', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr>
-                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '44px' }}>STT</th>
-                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600' }}>Tên mặt hàng</th>
-                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '130px' }}>HSD</th>
-                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '90px' }}>ĐVT</th>
-                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '110px', textAlign: 'right' }}>SL nhập</th>
-                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '160px', textAlign: 'right' }}>Đơn giá nhập (₫)</th>
-                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '130px', textAlign: 'right' }}>Thành tiền</th>
-                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '80px', textAlign: 'center' }}>Quà</th>
-                  <th style={{ padding: '0.75rem 1rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '70px' }}></th>
+                  <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '44px' }}>STT</th>
+                  <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600' }}>Tên mặt hàng</th>
+                  <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '130px' }}>HSD</th>
+                  <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '90px' }}>ĐVT</th>
+                  <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '110px', textAlign: 'right' }}>SL nhập</th>
+                  <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '160px', textAlign: 'right' }}>Đơn giá nhập (₫)</th>
+                  <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '130px', textAlign: 'right' }}>Thành tiền</th>
+                  <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '80px', textAlign: 'center' }}>Quà</th>
+                  <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '70px' }}></th>
                 </tr>
               </thead>
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan={10} style={{ padding: '4rem', textAlign: 'center', color: '#94a3b8' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                        <div style={{ padding: '1rem', borderRadius: '50%', backgroundColor: '#f1f5f9' }}>
-                          <Search size={32} />
+                    <td colSpan={10} style={{ padding: '2rem 1rem', textAlign: 'center', color: '#94a3b8' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                        <div style={{ padding: '0.65rem', borderRadius: '50%', backgroundColor: '#f1f5f9' }}>
+                          <Search size={24} />
                         </div>
-                        <p>Chưa có sản phẩm nào. Hãy tìm kiếm sản phẩm phía trên.</p>
+                        <p style={{ margin: 0, fontSize: '0.85rem' }}>Chưa có sản phẩm nào. Hãy tìm kiếm sản phẩm phía trên.</p>
                       </div>
                     </td>
                   </tr>
@@ -1005,6 +1076,167 @@ const InventoryImportPage: React.FC = () => {
         item={items.find(it => it.id === editingItemId)}
         onSave={handleSaveEdit}
       />
+
+      {/* Right Search Drawer */}
+      <SearchDrawer
+        isOpen={isSearchDrawerOpen}
+        onClose={() => setIsSearchDrawerOpen(false)}
+        title="Tìm kiếm nhập kho"
+        subtitle="Tìm sản phẩm để nhập kho, chọn nhà cung cấp hoặc người thực hiện"
+        activeFilterCount={activeFilterCount}
+        onReset={resetFilters}
+        onApply={() => setIsSearchDrawerOpen(false)}
+      >
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Tìm &amp; thêm sản phẩm vào phiếu nhập
+          </label>
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              placeholder="Nhập tên, mã SP hoặc mã vạch..."
+              value={productSearch}
+              onChange={(e) => {
+                setProductSearch(e.target.value);
+                setShowProductResults(true);
+              }}
+              style={{
+                width: '100%',
+                padding: '0.6rem 0.8rem',
+                borderRadius: '0.375rem',
+                border: '1px solid #cbd5e1',
+                fontSize: '0.875rem',
+                outline: 'none',
+              }}
+            />
+          </div>
+          {productSearch.trim() && (
+            <div
+              style={{
+                marginTop: '0.5rem',
+                maxHeight: '200px',
+                overflowY: 'auto',
+                border: '1px solid #e2e8f0',
+                borderRadius: '0.375rem',
+                backgroundColor: '#ffffff',
+              }}
+            >
+              {products
+                .filter(
+                  (p: any) =>
+                    p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+                    (p.barcode && p.barcode.includes(productSearch)) ||
+                    (p.productCode && p.productCode.toLowerCase().includes(productSearch.toLowerCase()))
+                )
+                .map((p: any) => (
+                  <div
+                    key={p.id}
+                    onClick={() => {
+                      handleAddItem(p);
+                      setProductSearch('');
+                    }}
+                    style={{
+                      padding: '0.5rem 0.75rem',
+                      borderBottom: '1px solid #f1f5f9',
+                      cursor: 'pointer',
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                    onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#f8fafc')}
+                    onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#ffffff')}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 600, color: '#1e293b' }}>{p.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                        {p.productCode || p.barcode || 'Chưa có mã'}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: '#4f46e5', fontWeight: 600 }}>+ Thêm</span>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Nhà cung cấp
+          </label>
+          <select
+            value={distributorId}
+            onChange={(e) => {
+              const selectedId = e.target.value;
+              setDistributorId(selectedId);
+              const found = distributors.find((d: any) => d.id === selectedId);
+              if (found) setDistributorSearch(found.name);
+            }}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              backgroundColor: '#ffffff',
+              outline: 'none',
+            }}
+          >
+            <option value="">-- Chọn nhà cung cấp --</option>
+            {distributors.map((d: any) => (
+              <option key={d.id} value={d.id}>
+                {d.name} {d.phone ? `(${d.phone})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Người thực hiện nhập kho
+          </label>
+          <select
+            value={personnelId}
+            onChange={(e) => setPersonnelId(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              backgroundColor: '#ffffff',
+              outline: 'none',
+            }}
+          >
+            <option value="">-- Chọn người nhập --</option>
+            {users.map((u: any) => (
+              <option key={u.id} value={u.fullName}>
+                {u.fullName} ({u.role || 'User'})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Số hóa đơn / Chứng từ
+          </label>
+          <input
+            type="text"
+            placeholder="Nhập số hóa đơn..."
+            value={invoiceName}
+            onChange={(e) => setInvoiceName(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              outline: 'none',
+            }}
+          />
+        </div>
+      </SearchDrawer>
     </div>
   );
 };

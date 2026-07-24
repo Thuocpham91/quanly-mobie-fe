@@ -11,10 +11,12 @@ import {
   CheckCircle,
   XCircle,
   Key,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import usersApi, { type User } from "../api/users";
 import UserModal from "../components/UserModal";
+import SearchDrawer from "../components/SearchDrawer";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useBranchContext } from "../context/BranchContext";
 import Pagination from "../components/Pagination";
@@ -26,6 +28,26 @@ const UsersPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
+
+  // Search Drawer states
+  const [isSearchDrawerOpen, setIsSearchDrawerOpen] = useState(false);
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [phoneEmailFilter, setPhoneEmailFilter] = useState("");
+
+  const activeFilterCount =
+    (searchTerm ? 1 : 0) +
+    (roleFilter ? 1 : 0) +
+    (statusFilter ? 1 : 0) +
+    (phoneEmailFilter ? 1 : 0);
+
+  const resetFilters = () => {
+    setSearchTerm("");
+    setRoleFilter("");
+    setStatusFilter("");
+    setPhoneEmailFilter("");
+  };
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const { selectedBranchId } = useBranchContext();
@@ -147,74 +169,63 @@ const UsersPage: React.FC = () => {
     }
   };
 
-  const filteredUsers = users?.filter(
-    (u) =>
-      u.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const filteredUsers = users?.filter((u: any) => {
+    const q = searchTerm.toLowerCase().trim();
+    const matchesSearch =
+      !q ||
+      u.fullName?.toLowerCase().includes(q) ||
+      u.email?.toLowerCase().includes(q) ||
+      u.username?.toLowerCase().includes(q) ||
+      u.phone?.includes(q);
+
+    const matchesRole = !roleFilter || u.role === roleFilter;
+
+    const isUserActive = u.isActive !== false;
+    const matchesStatus =
+      !statusFilter ? true :
+      statusFilter === 'active' ? isUserActive :
+      statusFilter === 'inactive' ? !isUserActive : true;
+
+    const matchesPhoneEmail =
+      !phoneEmailFilter ||
+      u.phone?.includes(phoneEmailFilter) ||
+      u.email?.toLowerCase().includes(phoneEmailFilter.toLowerCase());
+
+    return matchesSearch && matchesRole && matchesStatus && matchesPhoneEmail;
+  });
 
   return (
-    <div className="animate-in fade-in duration-500">
+    <div className="animate-in fade-in duration-500" style={{ paddingTop: '0.25rem' }}>
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "2rem",
+          marginBottom: "0.6rem",
         }}
       >
         <div>
           <h1
             style={{
-              fontSize: "1.875rem",
-              fontWeight: "800",
-              marginBottom: "0.25rem",
+              fontSize: "1.25rem",
+              fontWeight: "700",
+              margin: 0,
               letterSpacing: "-0.025em",
             }}
           >
             {t("users.title")}
           </h1>
-          <p style={{ color: "#64748b", fontSize: "1rem" }}>
+          <p style={{ color: "#64748b", fontSize: "0.8rem", margin: 0, marginTop: "0.1rem" }}>
             {t("users.subtitle")}
           </p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="btn-primary"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            padding: "0.75rem 1.25rem",
-            boxShadow: "0 4px 14px 0 rgba(99, 102, 241, 0.39)",
-          }}
-        >
-          <Plus size={18} />
-          {t("users.add_new")}
-        </button>
-      </div>
-
-      <div
-        className="card"
-        style={{
-          padding: "0",
-          overflow: "hidden",
-          border: "1px solid var(--border)",
-        }}
-      >
-        <div
-          style={{
-            padding: "1.5rem",
-            borderBottom: "1px solid var(--border)",
-            backgroundColor: "#fff",
-          }}
-        >
-          <div style={{ position: "relative", maxWidth: "400px" }}>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <div style={{ position: "relative", width: "260px" }}>
             <Search
-              size={18}
+              size={16}
               style={{
                 position: "absolute",
-                left: "12px",
+                left: "10px",
                 top: "50%",
                 transform: "translateY(-50%)",
                 color: "#94a3b8",
@@ -227,17 +238,79 @@ const UsersPage: React.FC = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
                 width: "100%",
-                padding: "0.75rem 1rem 0.75rem 2.75rem",
-                borderRadius: "0.75rem",
-                border: "1px solid var(--border)",
-                backgroundColor: "var(--background)",
+                padding: "0.45rem 0.85rem 0.45rem 2.2rem",
+                borderRadius: "0.375rem",
+                border: "1px solid #cbd5e1",
                 outline: "none",
-                fontSize: "0.875rem",
-                transition: "all 0.2s",
+                fontSize: "0.85rem",
+                backgroundColor: "#ffffff",
               }}
             />
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsSearchDrawerOpen(true)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              backgroundColor: "#ffffff",
+              border: "1px solid #cbd5e1",
+              color: "#334155",
+              cursor: "pointer",
+              padding: "0.45rem 0.85rem",
+              fontSize: "0.85rem",
+              borderRadius: "0.375rem",
+              fontWeight: "600",
+              boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
+            }}
+          >
+            <SlidersHorizontal size={16} color="#6366f1" />
+            Menu tìm kiếm
+            {activeFilterCount > 0 && (
+              <span
+                style={{
+                  backgroundColor: "#6366f1",
+                  color: "#ffffff",
+                  borderRadius: "9999px",
+                  padding: "0.05rem 0.4rem",
+                  fontSize: "0.7rem",
+                  fontWeight: 700,
+                }}
+              >
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={openCreateModal}
+            className="btn-primary"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              padding: "0.45rem 0.95rem",
+              fontSize: "0.85rem",
+              borderRadius: "0.375rem",
+              boxShadow: "0 2px 8px 0 rgba(99, 102, 241, 0.35)",
+            }}
+          >
+            <Plus size={16} />
+            {t("users.add_new")}
+          </button>
         </div>
+      </div>
+
+      <div
+        className="card"
+        style={{
+          padding: "0",
+          overflow: "hidden",
+          border: "1px solid var(--border)",
+        }}
+      >
 
         <div style={{ overflowX: "auto" }}>
           <table
@@ -842,6 +915,104 @@ const UsersPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Right Search Drawer */}
+      <SearchDrawer
+        isOpen={isSearchDrawerOpen}
+        onClose={() => setIsSearchDrawerOpen(false)}
+        title="Tìm kiếm người dùng"
+        subtitle="Lọc danh sách người dùng theo vai trò, trạng thái, SĐT/Email"
+        activeFilterCount={activeFilterCount}
+        onReset={resetFilters}
+        onApply={() => setIsSearchDrawerOpen(false)}
+      >
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Từ khóa tìm kiếm
+          </label>
+          <input
+            type="text"
+            placeholder="Họ tên, email, tên đăng nhập..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Vai trò (Role)
+          </label>
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              backgroundColor: '#ffffff',
+              outline: 'none',
+            }}
+          >
+            <option value="">-- Tất cả vai trò --</option>
+            <option value="admin">Quản trị viên (Admin)</option>
+            <option value="manager">Quản lý (Manager)</option>            <option value="staff">Nhân viên (Staff)</option>
+            <option value="user">Người dùng (User)</option>
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Trạng thái tài khoản
+          </label>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              backgroundColor: '#ffffff',
+              outline: 'none',
+            }}
+          >
+            <option value="">Tất cả trạng thái</option>
+            <option value="active">Đang hoạt động</option>
+            <option value="inactive">Đã khóa / Tạm dừng</option>
+          </select>
+        </div>
+
+        <div>
+          <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>
+            Số điện thoại / Email
+          </label>
+          <input
+            type="text"
+            placeholder="Lọc theo SĐT hoặc Email..."
+            value={phoneEmailFilter}
+            onChange={(e) => setPhoneEmailFilter(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '0.6rem 0.8rem',
+              borderRadius: '0.375rem',
+              border: '1px solid #cbd5e1',
+              fontSize: '0.875rem',
+              outline: 'none',
+            }}
+          />
+        </div>
+      </SearchDrawer>
     </div>
   );
 };
