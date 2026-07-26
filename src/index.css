@@ -275,4 +275,19 @@ button {
   -moz-appearance: textfield;
 }
 
+/* Table cell text truncation utilities */
+.cell-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-truncate-15 {
+  max-width: 15ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
 
