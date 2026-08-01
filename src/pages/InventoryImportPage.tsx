@@ -312,6 +312,8 @@ const InventoryImportPage: React.FC = () => {
       await updateMutation.mutateAsync({
         costPrice: first.costPrice,
         currentQuantity: first.importedQuantity,
+        importDate: importDate || undefined,
+        invoiceName: invoiceName || undefined,
       });
     } else {
       await importMutation.mutateAsync({

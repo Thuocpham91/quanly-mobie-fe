@@ -335,6 +335,7 @@ const POSPage: React.FC = () => {
         customerPhone,
       }),
       items: [],
+      createdAt: appointmentDate ? new Date(appointmentDate).toISOString() : undefined,
     };
 
     createOrderMutation.mutate(createDto);

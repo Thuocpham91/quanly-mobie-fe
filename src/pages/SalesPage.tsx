@@ -16,7 +16,8 @@ import {
   ChevronDown, 
   Check, 
   X,
-  Package
+  Package,
+  Calendar
 } from 'lucide-react';
 import { getInventorySummary, getCategories, type Product } from '../api/inventory';
 import { searchCustomers, createCustomer, type Customer } from '../api/customers';
@@ -47,6 +48,7 @@ const SalesPage: React.FC = () => {
   const [discount, setDiscount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'TRANSFER' | 'CARD'>('CASH');
   const [notes, setNotes] = useState('');
+  const [orderDate, setOrderDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   // Customer search & Selection state
   const [customerSearch, setCustomerSearch] = useState('');
@@ -130,6 +132,7 @@ const SalesPage: React.FC = () => {
       setSelectedCustomer(null);
       setCustomerSearch('');
       setPaymentMethod('CASH');
+      setOrderDate(new Date().toISOString().split('T')[0]);
     },
     onError: (err: any) => {
       console.error(err);
@@ -138,6 +141,11 @@ const SalesPage: React.FC = () => {
   });
 
   // --- HANDLERS & HELPERS ---
+
+  const handleUpdatePrice = (productId: string, newPrice: number) => {
+    const price = Math.max(0, newPrice);
+    setCart(cart.map(item => item.product.id === productId ? { ...item, unitPrice: price } : item));
+  };
 
   // Get price for specific branch or default to base price
   const getProductPrice = (product: Product): number => {
@@ -220,7 +228,8 @@ const SalesPage: React.FC = () => {
       paymentMethod: paymentMethod,
       customerId: selectedCustomer?.id || undefined,
       notes: notes,
-      status: 'COMPLETED' // Default standard sale order to completed upon checkout
+      status: 'COMPLETED', // Default standard sale order to completed upon checkout
+      createdAt: orderDate ? new Date(orderDate).toISOString() : undefined
     };
 
     createOrderMutation.mutate(payload);
@@ -787,8 +796,27 @@ const SalesPage: React.FC = () => {
                       <div style={{ fontSize: '0.85rem', fontWeight: '700', color: '#1e293b', lineHeight: '1.3' }}>
                         {item.product.name}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.15rem' }}>
-                        {formatCurrency(item.unitPrice)}
+                      <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <span>Giá bán:</span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={item.unitPrice}
+                          onChange={(e) => handleUpdatePrice(item.product.id, parseFloat(e.target.value) || 0)}
+                          style={{
+                            width: '95px',
+                            padding: '0.15rem 0.35rem',
+                            fontSize: '0.8rem',
+                            fontWeight: '700',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '0.25rem',
+                            outline: 'none',
+                            color: '#4f46e5',
+                            backgroundColor: '#f8fafc'
+                          }}
+                          title="Click để sửa đơn giá"
+                        />
+                        <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600' }}>đ</span>
                       </div>
                     </div>
                     <button
@@ -863,6 +891,29 @@ const SalesPage: React.FC = () => {
           gap: '1rem',
           flexShrink: 0
         }}>
+          {/* Invoice Date Input */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap' }}>
+              <Calendar size={14} color="#6366f1" />
+              Ngày hóa đơn
+            </label>
+            <input
+              type="date"
+              value={orderDate}
+              onChange={(e) => setOrderDate(e.target.value)}
+              style={{
+                width: '135px',
+                padding: '0.35rem 0.5rem',
+                fontSize: '0.8rem',
+                fontWeight: '600',
+                border: '1px solid #cbd5e1',
+                borderRadius: '0.25rem',
+                outline: 'none',
+                backgroundColor: 'white'
+              }}
+            />
+          </div>
+
           {/* Discount input */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
             <label style={{ fontSize: '0.8rem', fontWeight: '700', color: '#475569', display: 'flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap' }}>

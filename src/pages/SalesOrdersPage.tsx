@@ -20,7 +20,7 @@ import {
   Receipt
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { getOrders, updateOrderStatus, getOrderById, importOrdersExcel, importOrderDetailsExcel, type Order } from '../api/orders';
+import { getOrders, updateOrderStatus, updateOrderDate, getOrderById, importOrdersExcel, importOrderDetailsExcel, type Order } from '../api/orders';
 import Pagination from '../components/Pagination';
 import SearchDrawer from '../components/SearchDrawer';
 import { useBranchContext } from '../context/BranchContext';
@@ -50,6 +50,8 @@ const SalesOrdersPage: React.FC = () => {
 
   // Selected order for details modal
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isEditingDate, setIsEditingDate] = useState(false);
+  const [editingDateValue, setEditingDateValue] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importedCount, setImportedCount] = useState<number | null>(null);
@@ -105,6 +107,22 @@ const SalesOrdersPage: React.FC = () => {
     onError: (err: any) => {
       console.error(err);
       alert(err.response?.data?.message || 'Không thể cập nhật trạng thái đơn hàng.');
+    }
+  });
+
+  // Update Order Date Mutation
+  const updateDateMutation = useMutation({
+    mutationFn: ({ id, date }: { id: string; date: string }) => updateOrderDate(id, date),
+    onSuccess: (updatedOrder) => {
+      queryClient.invalidateQueries({ queryKey: ['salesOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['salesOrderDetail', updatedOrder.id] });
+      setSelectedOrder(updatedOrder);
+      setIsEditingDate(false);
+      alert('Đã cập nhật ngày hóa đơn thành công!');
+    },
+    onError: (err: any) => {
+      console.error(err);
+      alert(err.response?.data?.message || err.message || 'Không thể cập nhật ngày hóa đơn.');
     }
   });
 
@@ -615,9 +633,50 @@ const SalesOrdersPage: React.FC = () => {
                 <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: '#1e293b', margin: 0 }}>
                   Chi tiết đơn hàng: {selectedOrder.orderCode}
                 </h3>
-                <span style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.2rem', display: 'block' }}>
-                  Thời gian tạo: {formatDate(selectedOrder.createdAt)}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.2rem' }}>
+                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                    Ngày hóa đơn: {formatDate(selectedOrder.createdAt)}
+                  </span>
+                  {isEditingDate ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                      <input
+                        type="date"
+                        value={editingDateValue}
+                        onChange={(e) => setEditingDateValue(e.target.value)}
+                        style={{ fontSize: '0.75rem', padding: '0.15rem 0.35rem', border: '1px solid #cbd5e1', borderRadius: '0.25rem', outline: 'none' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!editingDateValue) return;
+                          updateDateMutation.mutate({ id: selectedOrder.id, date: new Date(editingDateValue).toISOString() });
+                        }}
+                        disabled={updateDateMutation.isPending}
+                        style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', backgroundColor: '#6366f1', color: 'white', border: 'none', borderRadius: '0.25rem', cursor: 'pointer', fontWeight: '600' }}
+                      >
+                        {updateDateMutation.isPending ? '...' : 'Lưu'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingDate(false)}
+                        style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', backgroundColor: '#e2e8f0', color: '#475569', border: 'none', borderRadius: '0.25rem', cursor: 'pointer' }}
+                      >
+                        Hủy
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditingDate(true);
+                        setEditingDateValue(selectedOrder.createdAt ? new Date(selectedOrder.createdAt).toISOString().split('T')[0] : '');
+                      }}
+                      style={{ fontSize: '0.72rem', color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, fontWeight: '600' }}
+                    >
+                      (Sửa ngày)
+                    </button>
+                  )}
+                </div>
               </div>
               <button 
                 onClick={() => setSelectedOrder(null)} 

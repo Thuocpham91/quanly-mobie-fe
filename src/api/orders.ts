@@ -18,6 +18,7 @@ export interface CreateOrderPayload {
   status?: 'DRAFT' | 'COMPLETED';
   notes?: string;
   walletCreditAmount?: number;
+  createdAt?: string;
 }
 
 export interface Order {
@@ -123,5 +124,10 @@ export const importOrderDetailsExcel = async (file: File, options?: { createMiss
 
 export const updateOrderStatus = async (id: string, status: string): Promise<Order> => {
   const response = await api.put(`/orders/${id}/status`, { status });
+  return response.data;
+};
+
+export const updateOrderDate = async (id: string, createdAt: string): Promise<Order> => {
+  const response = await api.put(`/orders/${id}/date`, { createdAt });
   return response.data;
 };
