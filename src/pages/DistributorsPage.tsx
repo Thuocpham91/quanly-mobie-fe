@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, Mail, Phone, MapPin, Edit2, Trash2, Building2, SlidersHorizontal } from 'lucide-react';
+import { Plus, Search, Mail, Phone, MapPin, Edit2, Trash2, Building2, SlidersHorizontal, Receipt } from 'lucide-react';
 import { getDistributors, createDistributor, updateDistributor, deleteDistributor, type Distributor } from '../api/distributors';
 import { useTranslation } from 'react-i18next';
 import DistributorModal from '../components/DistributorModal';
+import DistributorHistoryModal from '../components/DistributorHistoryModal';
 import SearchDrawer from '../components/SearchDrawer';
 
 const DistributorsPage: React.FC = () => {
@@ -16,6 +17,8 @@ const DistributorsPage: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDistributor, setSelectedDistributor] = useState<Distributor | undefined>();
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [historyDistributor, setHistoryDistributor] = useState<Distributor | undefined>();
 
   const activeFilterCount = (searchTerm ? 1 : 0) + (addressFilter ? 1 : 0);
 
@@ -201,7 +204,13 @@ const DistributorsPage: React.FC = () => {
                       }}>
                         <Building2 size={18} />
                       </div>
-                      <div style={{ fontWeight: '600', fontSize: '0.875rem' }}>{distributor.name}</div>
+                      <div 
+                        onClick={() => { setHistoryDistributor(distributor); setIsHistoryModalOpen(true); }}
+                        style={{ fontWeight: '600', fontSize: '0.875rem', color: '#2563eb', cursor: 'pointer', textDecoration: 'underline' }}
+                        title="Bấm để xem lịch sử nhập hàng"
+                      >
+                        {distributor.name}
+                      </div>
                     </div>
                   </td>
                   <td style={{ padding: '0.85rem 1.25rem' }}>
@@ -227,11 +236,32 @@ const DistributorsPage: React.FC = () => {
                     </div>
                   </td>
                   <td style={{ padding: '0.85rem 1.25rem', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem' }}>
-                      <button onClick={() => handleEdit(distributor)} style={{ padding: '0.35rem', backgroundColor: 'transparent', color: '#64748b', cursor: 'pointer', border: 'none' }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', alignItems: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => { setHistoryDistributor(distributor); setIsHistoryModalOpen(true); }}
+                        style={{
+                          padding: '0.35rem 0.65rem',
+                          backgroundColor: '#eff6ff',
+                          color: '#2563eb',
+                          border: '1px solid #bfdbfe',
+                          borderRadius: '0.375rem',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                        }}
+                        title="Xem lịch sử nhập hàng & tổng tiền"
+                      >
+                        <Receipt size={14} />
+                        <span>Lịch sử nhập</span>
+                      </button>
+                      <button onClick={() => handleEdit(distributor)} style={{ padding: '0.35rem', backgroundColor: 'transparent', color: '#64748b', cursor: 'pointer', border: 'none' }} title="Sửa thông tin">
                         <Edit2 size={15} />
                       </button>
-                      <button onClick={() => handleDelete(distributor.id)} style={{ padding: '0.35rem', backgroundColor: 'transparent', color: '#ef4444', cursor: 'pointer', border: 'none' }}>
+                      <button onClick={() => handleDelete(distributor.id)} style={{ padding: '0.35rem', backgroundColor: 'transparent', color: '#ef4444', cursor: 'pointer', border: 'none' }} title="Xóa nhà phân phối">
                         <Trash2 size={15} />
                       </button>
                     </div>
@@ -248,6 +278,12 @@ const DistributorsPage: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         distributor={selectedDistributor}
         onSubmit={handleSubmit}
+      />
+
+      <DistributorHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        distributor={historyDistributor}
       />
 
       {/* Right Search Drawer */}

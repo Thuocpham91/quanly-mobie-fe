@@ -36,7 +36,8 @@ import {
   Tag,
   AlignLeft,
   TrendingUp,
-  FileText
+  FileText,
+  BarChart3
 } from 'lucide-react';
 
 const DashboardLayout: React.FC = () => {
@@ -188,6 +189,13 @@ const DashboardLayout: React.FC = () => {
         { path: '/admin/customers',    icon: <Users size={18} />,           label: t('common.customers'),     permission: 'customers.view' },
         { path: '/admin/appointments', icon: <Calendar size={18} />,        label: 'Công việc',           permission: 'appointments.view' },
         { path: '/admin/policies',     icon: <AlignLeft size={18} />,       label: 'Nội quy chính sách',  permission: 'dashboard.view' },
+      ]
+    },
+    {
+      label: 'Báo cáo',
+      icon: <BarChart3 size={18} />,
+      items: [
+        { path: '/admin/reports', icon: <BarChart3 size={18} />, label: 'Báo cáo Doanh thu & Lợi nhuận', permission: 'dashboard.view' },
       ]
     },
     {

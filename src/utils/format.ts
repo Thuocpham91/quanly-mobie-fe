@@ -19,3 +19,17 @@ export const parseNumber = (value: string): number => {
   const num = parseFloat(cleanValue);
   return isNaN(num) ? 0 : num;
 };
+
+/**
+ * Formats a date string or Date object to DD/MM/YYYY.
+ */
+export const formatDate = (dateValue?: string | Date | null): string => {
+  if (!dateValue) return '--';
+  if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+    const [year, month, day] = dateValue.split('-');
+    return `${day}/${month}/${year}`;
+  }
+  const d = new Date(dateValue);
+  if (isNaN(d.getTime())) return '--';
+  return d.toLocaleDateString('vi-VN');
+};

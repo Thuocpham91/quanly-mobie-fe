@@ -282,6 +282,11 @@ const ProductsPage: React.FC = () => {
                           {t('products.service_badge')}
                         </span>
                       )}
+                      {p.hasImei && (
+                        <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', padding: '0.1rem 0.4rem', backgroundColor: '#ede9fe', color: '#6d28d9', borderRadius: '4px', fontWeight: 600 }}>
+                          IMEI
+                        </span>
+                      )}
                     </td>
                     <td style={{ padding: '1rem', color: '#64748b' }}>{p.category?.name || '--'}</td>
                     <td style={{ padding: '1rem', color: '#64748b' }}>{p.unit?.name || '--'}</td>

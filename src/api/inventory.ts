@@ -39,6 +39,7 @@ export interface Product {
   name: string;
   productCode?: string;
   isService?: boolean;
+  hasImei?: boolean;
   imageUrl?: string;
   imageUrls?: string[];
   manufacturer?: string;
@@ -77,6 +78,7 @@ export interface InventoryBatch {
   unitId?: string;
   packagingUnitId?: string;
   conversionFactor?: number;
+  imeis?: string[];
 }
 
 export interface InventorySummary {
@@ -92,6 +94,7 @@ export interface ImportOrderItem {
   costPrice?: number;
   expiryDate?: string;
   isGift?: boolean;
+  imeis?: string[];
 }
 
 export interface ImportOrder {
@@ -402,9 +405,10 @@ export const uploadMultipleFiles = async (files: File[]) => {
 };
 
 // Import Order APIs
-export const getImportOrders = async (branchId?: string, page = 1, limit = 10) => {
+export const getImportOrders = async (branchId?: string, page = 1, limit = 10, distributorId?: string) => {
   const query = new URLSearchParams();
   if (branchId) query.append('branchId', branchId);
+  if (distributorId) query.append('distributorId', distributorId);
   query.append('page', String(page));
   query.append('limit', String(limit));
   const response = await client.get<any>(`/inventory/import-orders?${query.toString()}`);

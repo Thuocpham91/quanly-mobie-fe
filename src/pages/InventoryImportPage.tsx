@@ -33,6 +33,7 @@ interface ImportItem {
   priceType: 'base' | 'packaging';
   expiryDate: string;
   isGift: boolean;
+  imeis?: string[];
   conversionFactor?: number; // kept for legacy compat if needed
   quantityBoxes?: number; // kept for legacy compat if needed
   packagingUnitId?: string; // kept for legacy compat if needed
@@ -98,7 +99,7 @@ const InventoryImportPage: React.FC = () => {
 
   useEffect(() => {
     if (editingBatch && editId) {
-      setImportDate(editingBatch.importDate ? new Date(editingBatch.importDate).toISOString().split('T')[0] : '');
+      setImportDate(editingBatch.importDate ? new Date(editingBatch.importDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
       setDistributorId(editingBatch.distributorId || '');
       setDistributorSearch(editingBatch.distributor?.name || '');
       setInvoiceName(editingBatch.invoiceName || '');
@@ -253,6 +254,7 @@ const InventoryImportPage: React.FC = () => {
       priceType: details?.priceType || 'base',
       expiryDate: details?.expiryDate || '',
       isGift: false,
+      imeis: details?.imeis || [],
     };
     setItems([...items, newItem]);
     setProductSearch('');
@@ -279,8 +281,26 @@ const InventoryImportPage: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!selectedBranchId) return alert('Please select a branch');
-    if (items.length === 0) return alert('Please add at least one product');
+    if (!selectedBranchId) return alert('Vui lòng chọn chi nhánh');
+    if (items.length === 0) return alert('Vui lòng thêm ít nhất một sản phẩm');
+
+    // Check for missing IMEIs
+    const missingImeiItems = items.filter((item) => {
+      if (!item.product.hasImei) return false;
+      let totalQty = item.unitQuantities[item.baseUnitId] || 0;
+      item.product.units?.forEach((pu: any) => {
+        totalQty += (item.unitQuantities[pu.unitId] || 0) * (pu.conversionFactor || 1);
+      });
+      return (item.imeis || []).length < totalQty;
+    });
+
+    if (missingImeiItems.length > 0) {
+      const names = missingImeiItems.map((i) => i.product.name).join(', ');
+      const confirmProceed = window.confirm(
+        `Có ${missingImeiItems.length} mặt hàng (${names}) yêu cầu IMEI nhưng chưa nhập đủ số lượng IMEI. Bạn có muốn tiếp tục lưu đơn nhập không?`,
+      );
+      if (!confirmProceed) return;
+    }
 
     const orderItems = items.map(item => {
       let totalQty = item.unitQuantities[item.baseUnitId] || 0;
@@ -303,6 +323,7 @@ const InventoryImportPage: React.FC = () => {
         costPrice: Math.round(unitPrice),
         expiryDate: item.expiryDate || undefined,
         isGift: item.isGift,
+        imeis: item.product.hasImei ? item.imeis || [] : undefined,
       };
     });
 
@@ -312,8 +333,9 @@ const InventoryImportPage: React.FC = () => {
       await updateMutation.mutateAsync({
         costPrice: first.costPrice,
         currentQuantity: first.importedQuantity,
-        importDate: importDate || undefined,
+        importDate: importDate || new Date().toISOString().split('T')[0],
         invoiceName: invoiceName || undefined,
+        imeis: first.imeis,
       });
     } else {
       await importMutation.mutateAsync({
@@ -321,7 +343,7 @@ const InventoryImportPage: React.FC = () => {
         distributorId: distributorId || undefined,
         invoiceName: invoiceName || undefined,
         personnelName: personnelId || undefined,
-        importDate: importDate,
+        importDate: importDate || new Date().toISOString().split('T')[0],
         taxAmount: taxAmount,
         discountAmount: discountAmount,
         shippingFee: shippingFee,
@@ -837,6 +859,28 @@ const InventoryImportPage: React.FC = () => {
                         <span>Quà tặng</span>
                       </label>
                     </div>
+
+                    {item.product.hasImei && (
+                      <div style={{ gridColumn: 'span 2', marginTop: '0.25rem', padding: '0.4rem 0.6rem', backgroundColor: '#f0f9ff', borderRadius: '0.375rem', border: '1px solid #bae6fd' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0369a1' }}>
+                            IMEI: {(item.imeis || []).length}/{item.unitQuantities[item.baseUnitId] || 0}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleEditItem(item)}
+                            style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem', color: '#0284c7', backgroundColor: 'white', border: '1px solid #7dd3fc', borderRadius: '0.25rem', cursor: 'pointer' }}
+                          >
+                            Nhập IMEI
+                          </button>
+                        </div>
+                        {(item.imeis || []).length > 0 && (
+                          <div style={{ fontSize: '0.7rem', color: '#475569', fontFamily: 'monospace', marginTop: '0.2rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {(item.imeis || []).join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -883,6 +927,35 @@ const InventoryImportPage: React.FC = () => {
                     <td style={{ padding: '0.6rem 1rem' }}>
                       <div style={{ fontWeight: '600', color: '#1e293b' }}>{item.product.name}</div>
                       <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{item.product.barcode || item.product.productCode || ''}</div>
+                      {item.product.hasImei && (
+                        <div style={{ marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleEditItem(item)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.25rem',
+                              padding: '0.15rem 0.5rem',
+                              borderRadius: '0.25rem',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              border: 'none',
+                              cursor: 'pointer',
+                              backgroundColor: (item.imeis || []).length >= totalQty ? '#dcfce7' : '#fef3c7',
+                              color: (item.imeis || []).length >= totalQty ? '#15803d' : '#b45309'
+                            }}
+                          >
+                            <span>IMEI ({(item.imeis || []).length}/{totalQty})</span>
+                            <Edit2 size={11} />
+                          </button>
+                          {(item.imeis || []).length > 0 && (
+                            <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>
+                              {(item.imeis || []).slice(0, 2).join(', ')}{(item.imeis || []).length > 2 ? ` (+${(item.imeis || []).length - 2})` : ''}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '0.6rem 1rem' }}>
                       <input

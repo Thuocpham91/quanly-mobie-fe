@@ -6,6 +6,7 @@ import {
   Receipt, FileText, Truck, TicketPercent, Banknote, Printer
 } from 'lucide-react';
 import { getImportOrder, type ImportOrder, type InventoryBatch } from '../api/inventory';
+import { formatDate } from '../utils/format';
 
 const InventoryOrderDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -98,7 +99,7 @@ const InventoryOrderDetailPage: React.FC = () => {
           {
             icon: Calendar, color: '#3b82f6', bg: '#eff6ff',
             label: 'Ngày nhập',
-            value: order.importDate ? new Date(order.importDate).toLocaleDateString('vi-VN') : '--',
+            value: formatDate(order.importDate || order.createdAt),
           },
           {
             icon: Building2, color: '#10b981', bg: '#f0fdf4',

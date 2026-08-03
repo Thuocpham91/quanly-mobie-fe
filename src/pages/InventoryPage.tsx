@@ -13,6 +13,7 @@ import {
   type ImportOrder
 } from '../api/inventory';
 import { useBranchContext } from '../context/BranchContext';
+import { formatDate } from '../utils/format';
 import * as XLSX from 'xlsx';
 
 const InventoryPage: React.FC = () => {
@@ -93,7 +94,7 @@ const InventoryPage: React.FC = () => {
     const exportData = filteredOrders.map((order: ImportOrder, idx: number) => ({
       'STT': idx + 1,
       'Mã phiếu': order.code,
-      'Ngày nhập': order.importDate ? new Date(order.importDate).toLocaleDateString('vi-VN') : '--',
+      'Ngày nhập': formatDate(order.importDate || order.createdAt),
       'Nhà cung cấp': order.distributor?.name || '--',
       'Số hóa đơn': order.invoiceName || '--',
       'Người nhập': order.personnelName || '--',
@@ -335,7 +336,7 @@ const InventoryPage: React.FC = () => {
                       <div style={{ fontWeight: '700', color: '#3b82f6', fontSize: '0.9rem' }}>{order.code}</div>
                     </td>
                     <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.875rem' }}>
-                      {order.importDate ? new Date(order.importDate).toLocaleDateString('vi-VN') : '--'}
+                      {formatDate(order.importDate || order.createdAt)}
                     </td>
                     <td style={{ padding: '1rem', color: '#1e293b', fontWeight: '500', fontSize: '0.875rem' }}>
                       {order.distributor?.name || <span style={{ color: '#94a3b8' }}>--</span>}

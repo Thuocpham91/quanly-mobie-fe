@@ -17,7 +17,8 @@ const EditItemModal: React.FC<EditItemModalProps> = ({ isOpen, onClose, item, on
     unitQuantities: item?.unitQuantities || {},
     expiryDate: item?.expiryDate || '',
     costPrice: item?.costPrice || 0,
-    priceType: item?.priceType || 'base'
+    priceType: item?.priceType || 'base',
+    imeisText: (item?.imeis || []).join('\n')
   });
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -37,7 +38,8 @@ const EditItemModal: React.FC<EditItemModalProps> = ({ isOpen, onClose, item, on
         unitQuantities: item.unitQuantities || {},
         expiryDate: item.expiryDate || '',
         costPrice: item.costPrice || 0,
-        priceType: item.priceType || 'base'
+        priceType: item.priceType || 'base',
+        imeisText: (item.imeis || []).join('\n')
       });
     }
   }, [item, isOpen]);
@@ -59,8 +61,13 @@ const EditItemModal: React.FC<EditItemModalProps> = ({ isOpen, onClose, item, on
       totalPieces += (details.unitQuantities[pu.unitId] || 0) * pu.conversionFactor;
     });
 
+    const parsedImeis = details.imeisText
+      ? details.imeisText.split(/[\n,]+/).map((s: string) => s.trim()).filter(Boolean)
+      : [];
+
     onSave({
       ...details,
+      imeis: parsedImeis,
       quantityPieces: totalPieces,
       conversionFactor: 1, // Reset for consistency
       quantityBoxes: 0
@@ -157,6 +164,29 @@ const EditItemModal: React.FC<EditItemModalProps> = ({ isOpen, onClose, item, on
               />
             </div>
           </div>
+
+          {item.product?.hasImei && (
+            <div className="form-group" style={{ gridColumn: 'span 2', padding: '1rem', backgroundColor: '#f0f9ff', borderRadius: '0.75rem', border: '1px solid #bae6fd' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#0369a1' }}>
+                  Danh sách số Serial / IMEI máy
+                </label>
+                <span style={{ fontSize: '0.75rem', fontWeight: '600', color: details.imeisText.split(/[\n,]+/).filter(Boolean).length === (details.unitQuantities[details.baseUnitId] || 0) ? '#059669' : '#d97706' }}>
+                  Đã nhập: {details.imeisText.split(/[\n,]+/).filter(Boolean).length} / {details.unitQuantities[details.baseUnitId] || 0}
+                </span>
+              </div>
+              <textarea
+                rows={4}
+                placeholder="Nhập hoặc dán các mã IMEI/Serial (mỗi mã 1 dòng hoặc cách nhau bằng dấu phẩy)..."
+                style={{ width: '100%', padding: '0.6rem', borderRadius: '0.5rem', border: '1px solid #7dd3fc', fontSize: '0.85rem', fontFamily: 'monospace', outline: 'none', boxSizing: 'border-box' }}
+                value={details.imeisText}
+                onChange={(e) => setDetails({ ...details, imeisText: e.target.value })}
+              />
+              <div style={{ fontSize: '0.7rem', color: '#0284c7', marginTop: '0.25rem' }}>
+                * Mỗi IMEI là 1 máy. Bạn có thể quét mã vạch hoặc dán nhiều mã cùng lúc.
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

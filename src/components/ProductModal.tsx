@@ -33,6 +33,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
     units: any[];
     usage: string;
     isService: boolean;
+    hasImei: boolean;
   }>({
     name: '',
     barcode: '',
@@ -46,7 +47,8 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
     unitId: '',
     units: [] as any[],
     usage: '',
-    isService: false
+    isService: false,
+    hasImei: false,
   });
 
   const { data: categories = [] } = useQuery({
@@ -213,6 +215,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
         units: product.units ? [...product.units] : [],
         usage: product.usage || '',
         isService: product.isService || false,
+        hasImei: product.hasImei || false,
       });
     } else if (!isOpen) {
       setFormData({
@@ -229,6 +232,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
         units: [],
         usage: '',
         isService: false,
+        hasImei: false,
       });
     }
   }, [product, isOpen]);
@@ -310,6 +314,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
         unitId: formData.unitId || undefined,
         usage: formData.usage || undefined,
         isService: formData.isService || false,
+        hasImei: formData.hasImei || false,
         units: formData.units
           .filter((u: any) => u.unitId)
           .map((u: any) => ({
@@ -352,17 +357,29 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
                   style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '0.75rem', border: '1px solid var(--border)', outline: 'none' }} />
               </div>
               
-              <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <input 
-                  type="checkbox" 
-                  id="isService"
-                  name="isService" 
-                  checked={formData.isService}
-                  onChange={(e) => handleServiceChange(e.target.checked)}
-                  style={{ width: '1.25rem', height: '1.25rem', accentColor: '#10b981', cursor: 'pointer' }}
-                />
-                <label htmlFor="isService" style={{ fontSize: '0.875rem', fontWeight: '500', color: '#334155', cursor: 'pointer' }}>
+              <div style={{ marginTop: '0.75rem', display: 'flex', flexWrap: 'wrap', gap: '1.25rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', fontWeight: '500', color: '#334155', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    id="isService"
+                    name="isService" 
+                    checked={formData.isService}
+                    onChange={(e) => handleServiceChange(e.target.checked)}
+                    style={{ width: '1.15rem', height: '1.15rem', accentColor: '#10b981', cursor: 'pointer' }}
+                  />
                   Đây là Dịch vụ (Không tính tồn kho)
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', fontWeight: '500', color: '#334155', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    id="hasImei"
+                    name="hasImei" 
+                    checked={formData.hasImei}
+                    onChange={(e) => setFormData(prev => ({ ...prev, hasImei: e.target.checked }))}
+                    style={{ width: '1.15rem', height: '1.15rem', accentColor: '#6366f1', cursor: 'pointer' }}
+                  />
+                  Quản lý theo Serial / IMEI (Hàng giá trị cao)
                 </label>
               </div>
             </div>

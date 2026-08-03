@@ -24,6 +24,7 @@ import StocktakeListPage from './pages/StocktakeListPage';
 import StocktakeFormPage from './pages/StocktakeFormPage';
 import InventoryTransferPage from './pages/InventoryTransferPage';
 import InventoryOrderDetailPage from './pages/InventoryOrderDetailPage';
+import ReportsPage from './pages/ReportsPage';
 import PermissionGuard from './guards/PermissionGuard';
 
 import { BranchProvider } from './context/BranchContext';
@@ -68,6 +69,7 @@ function App() {
               <Route path="policies"                element={<P path="/admin/policies"><PoliciesPage /></P>} />
               <Route path="sales"                   element={<P path="/admin/sales"><SalesPage /></P>} />
               <Route path="orders"                  element={<P path="/admin/orders"><SalesOrdersPage /></P>} />
+              <Route path="reports"                 element={<P path="/admin/reports"><ReportsPage /></P>} />
               <Route path="distributors"            element={<P path="/admin/distributors"><DistributorsPage /></P>} />
               <Route path="users"                   element={<P path="/admin/users"><UsersPage /></P>} />
               <Route path="roles"                   element={<P path="/admin/roles"><RolesPage /></P>} />
