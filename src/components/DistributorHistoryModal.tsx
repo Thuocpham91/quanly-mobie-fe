@@ -108,7 +108,7 @@ const DistributorHistoryModal: React.FC<DistributorHistoryModalProps> = ({
             borderBottom: '1px solid #e2e8f0',
             display: 'flex',
             alignItems: 'center',
-            justify: 'space-between',
+            justifyContent: 'space-between',
             backgroundColor: '#f8fafc',
           }}
         >
@@ -121,7 +121,7 @@ const DistributorHistoryModal: React.FC<DistributorHistoryModalProps> = ({
                 backgroundColor: '#eff6ff',
                 display: 'flex',
                 alignItems: 'center',
-                justify: 'center',
+                justifyContent: 'center',
                 color: '#3b82f6',
               }}
             >
@@ -133,7 +133,7 @@ const DistributorHistoryModal: React.FC<DistributorHistoryModalProps> = ({
                   Lịch sử nhập hàng — {distributor.name}
                 </h2>
                 {isLoading && (
-                  <Loader2 size={18} style={{ color: '#3b82f6', animation: 'spin 1s linear infinite' }} title="Đang tải dữ liệu..." />
+                  <Loader2 size={18} style={{ color: '#3b82f6', animation: 'spin 1s linear infinite' }} />
                 )}
               </div>
               <div style={{ display: 'flex', gap: '1rem', marginTop: '0.2rem', fontSize: '0.8rem', color: '#64748b' }}>
@@ -193,7 +193,7 @@ const DistributorHistoryModal: React.FC<DistributorHistoryModalProps> = ({
                   color: '#10b981',
                   display: 'flex',
                   alignItems: 'center',
-                  justify: 'center',
+                  justifyContent: 'center',
                 }}
               >
                 <Receipt size={22} />
@@ -226,7 +226,7 @@ const DistributorHistoryModal: React.FC<DistributorHistoryModalProps> = ({
                   color: '#3b82f6',
                   display: 'flex',
                   alignItems: 'center',
-                  justify: 'center',
+                  justifyContent: 'center',
                 }}
               >
                 <Calendar size={22} />
@@ -259,7 +259,7 @@ const DistributorHistoryModal: React.FC<DistributorHistoryModalProps> = ({
                   color: '#f59e0b',
                   display: 'flex',
                   alignItems: 'center',
-                  justify: 'center',
+                  justifyContent: 'center',
                 }}
               >
                 <Package size={22} />
@@ -399,7 +399,7 @@ const DistributorHistoryModal: React.FC<DistributorHistoryModalProps> = ({
             borderTop: '1px solid #e2e8f0',
             backgroundColor: '#f8fafc',
             display: 'flex',
-            justify: 'flex-end',
+            justifyContent: 'flex-end',
           }}
         >
           <button
