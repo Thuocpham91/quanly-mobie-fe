@@ -2,6 +2,7 @@ import client, { type PaginatedResponse } from './client';
 
 export interface Customer {
   id: string;
+  code?: string;
   fullName: string;
   phone: string;
   email?: string;
@@ -10,6 +11,11 @@ export interface Customer {
   customerType?: string;
   walletBalance: number;
   createdAt: string;
+  lastPurchaseDate?: string;
+  creator?: string;
+  totalSales?: number;
+  currentDebt?: number;
+  totalSalesMinusReturns?: number;
 }
 
 

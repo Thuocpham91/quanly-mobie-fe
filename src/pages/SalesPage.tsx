@@ -147,13 +147,28 @@ const SalesPage: React.FC = () => {
     setCart(cart.map(item => item.product.id === productId ? { ...item, unitPrice: price } : item));
   };
 
-  // Get price for specific branch or default to base price
+  // Get selling price for specific branch or default to selling/base price
   const getProductPrice = (product: Product): number => {
+    if (!product) return 0;
     if (product.branchPrices && selectedBranchId) {
       const bp = product.branchPrices.find(p => p.branchId === selectedBranchId);
-      if (bp) return bp.price;
+      if (bp && bp.price !== undefined && bp.price !== null && Number(bp.price) > 0) {
+        return Number(bp.price);
+      }
     }
-    return product.basePrice || 0;
+    if (product.sellingPrice && Number(product.sellingPrice) > 0) {
+      return Number(product.sellingPrice);
+    }
+    if (product.salePrice && Number(product.salePrice) > 0) {
+      return Number(product.salePrice);
+    }
+    if (product.price && Number(product.price) > 0) {
+      return Number(product.price);
+    }
+    if (product.basePrice && Number(product.basePrice) > 0) {
+      return Number(product.basePrice);
+    }
+    return 0;
   };
 
   const handleAddToCart = (product: Product, currentStock: number) => {
@@ -735,11 +750,18 @@ const SalesPage: React.FC = () => {
                         <span style={{ fontWeight: '600', color: '#1e293b' }}>{c.fullName}</span>
                         <span style={{ color: '#64748b', marginLeft: '0.5rem' }}>({c.phone})</span>
                       </div>
-                      {c.walletBalance > 0 && (
-                        <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: '500' }}>
-                          Ví: {formatCurrency(c.walletBalance)}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.1rem' }}>
+                        {c.walletBalance > 0 && (
+                          <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: '500' }}>
+                            Ví: {formatCurrency(c.walletBalance)}
+                          </span>
+                        )}
+                        <span style={{ fontSize: '0.72rem', color: '#6366f1', fontWeight: '500' }}>
+                          {c.lastPurchaseDate 
+                            ? `Ngày mua: ${new Date(c.lastPurchaseDate).toLocaleDateString('vi-VN')}` 
+                            : (c.createdAt ? `Ngày tạo: ${new Date(c.createdAt).toLocaleDateString('vi-VN')}` : 'Mới')}
                         </span>
-                      )}
+                      </div>
                     </div>
                   ))}
                 </div>

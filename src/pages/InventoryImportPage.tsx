@@ -860,18 +860,18 @@ const InventoryImportPage: React.FC = () => {
                       </label>
                     </div>
 
-                    {item.product.hasImei && (
+                    {(item.product?.hasImei || (item.product as any)?.isImei || (item.product as any)?.manageImei) && (
                       <div style={{ gridColumn: 'span 2', marginTop: '0.25rem', padding: '0.4rem 0.6rem', backgroundColor: '#f0f9ff', borderRadius: '0.375rem', border: '1px solid #bae6fd' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0369a1' }}>
-                            IMEI: {(item.imeis || []).length}/{item.unitQuantities[item.baseUnitId] || 0}
+                            IMEI / Serial: {(item.imeis || []).length}/{item.unitQuantities[item.baseUnitId] || 0}
                           </span>
                           <button
                             type="button"
                             onClick={() => handleEditItem(item)}
                             style={{ padding: '0.15rem 0.4rem', fontSize: '0.7rem', color: '#0284c7', backgroundColor: 'white', border: '1px solid #7dd3fc', borderRadius: '0.25rem', cursor: 'pointer' }}
                           >
-                            Nhập IMEI
+                            + Điền IMEI
                           </button>
                         </div>
                         {(item.imeis || []).length > 0 && (
@@ -922,38 +922,47 @@ const InventoryImportPage: React.FC = () => {
                   const lineTotal = item.isGift ? 0 : item.costPrice;
 
                   return (
-                  <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? 'white' : '#fafafa' }}>
-                    <td style={{ padding: '0.6rem 1rem', color: '#64748b', fontSize: '0.875rem' }}>{idx + 1}</td>
+                    <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? 'white' : '#fafafa' }}>
+                      <td style={{ padding: '0.6rem 1rem', color: '#64748b', fontSize: '0.875rem' }}>{idx + 1}</td>
                     <td style={{ padding: '0.6rem 1rem' }}>
                       <div style={{ fontWeight: '600', color: '#1e293b' }}>{item.product.name}</div>
                       <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{item.product.barcode || item.product.productCode || ''}</div>
-                      {item.product.hasImei && (
-                        <div style={{ marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                          <button
-                            type="button"
-                            onClick={() => handleEditItem(item)}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.25rem',
-                              padding: '0.15rem 0.5rem',
+                      {/* Dòng điền IMEI trực tiếp - chỉ hiện khi sản phẩm bật tính năng quản lý IMEI */}
+                      {(item.product?.hasImei || (item.product as any)?.isImei || (item.product as any)?.manageImei) && (
+                        <div style={{ marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            <span style={{ 
+                              fontSize: '0.72rem', 
+                              fontWeight: '700', 
+                              color: (item.imeis || []).length >= totalQty && totalQty > 0 ? '#059669' : '#d97706',
+                              backgroundColor: (item.imeis || []).length >= totalQty && totalQty > 0 ? '#dcfce7' : '#fef3c7',
+                              padding: '0.15rem 0.4rem',
                               borderRadius: '0.25rem',
-                              fontSize: '0.72rem',
-                              fontWeight: 600,
-                              border: 'none',
-                              cursor: 'pointer',
-                              backgroundColor: (item.imeis || []).length >= totalQty ? '#dcfce7' : '#fef3c7',
-                              color: (item.imeis || []).length >= totalQty ? '#15803d' : '#b45309'
-                            }}
-                          >
-                            <span>IMEI ({(item.imeis || []).length}/{totalQty})</span>
-                            <Edit2 size={11} />
-                          </button>
-                          {(item.imeis || []).length > 0 && (
-                            <span style={{ fontSize: '0.7rem', color: '#64748b', fontFamily: 'monospace' }}>
-                              {(item.imeis || []).slice(0, 2).join(', ')}{(item.imeis || []).length > 2 ? ` (+${(item.imeis || []).length - 2})` : ''}
+                              whiteSpace: 'nowrap'
+                            }}>
+                              Mã IMEI ({(item.imeis || []).length}/{totalQty}):
                             </span>
-                          )}
+                            <input
+                              type="text"
+                              placeholder="Điền hoặc quét mã IMEI (mỗi mã cách nhau bởi dấu phẩy)..."
+                              value={(item.imeis || []).join(', ')}
+                              onChange={(e) => {
+                                const list = e.target.value.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+                                handleUpdateItem(item.id, { imeis: list });
+                              }}
+                              style={{
+                                flex: 1,
+                                minWidth: '240px',
+                                padding: '0.25rem 0.5rem',
+                                fontSize: '0.78rem',
+                                fontFamily: 'monospace',
+                                border: '1px solid #7dd3fc',
+                                borderRadius: '0.25rem',
+                                outline: 'none',
+                                backgroundColor: '#f0f9ff'
+                              }}
+                            />
+                          </div>
                         </div>
                       )}
                     </td>

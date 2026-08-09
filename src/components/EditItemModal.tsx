@@ -165,7 +165,7 @@ const EditItemModal: React.FC<EditItemModalProps> = ({ isOpen, onClose, item, on
             </div>
           </div>
 
-          {item.product?.hasImei && (
+          {(item.product?.hasImei || (item.product as any)?.isImei || (item.product as any)?.manageImei) && (
             <div className="form-group" style={{ gridColumn: 'span 2', padding: '1rem', backgroundColor: '#f0f9ff', borderRadius: '0.75rem', border: '1px solid #bae6fd' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
                 <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#0369a1' }}>

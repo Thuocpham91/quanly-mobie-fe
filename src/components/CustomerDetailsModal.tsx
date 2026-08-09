@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, User, Phone, Mail, MapPin, Wallet, Plus, Calendar, Dog, Edit, Trash2, CheckCircle, XCircle, FileText } from 'lucide-react';
+import { X, User, Phone, Mail, MapPin, Wallet, Plus, Calendar, Dog, Edit, Trash2, CheckCircle, XCircle, FileText, ShoppingBag, Clock } from 'lucide-react';
 import { type Customer, topUpWallet } from '../api/customers';
 import { getCustomerAppointments, createAppointment, updateAppointment } from '../api/appointments';
 import { getOrders } from '../api/orders';
@@ -16,7 +16,7 @@ interface CustomerDetailsModalProps {
 
 const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onClose, customer }) => {
   const { selectedBranchId } = useBranchContext();
-  const [activeTab, setActiveTab] = useState<'pets' | 'appointments' | 'services'>('appointments');
+  const [activeTab, setActiveTab] = useState<'appointments' | 'orders' | 'services'>('orders');
   const queryClient = useQueryClient();
   const customerId = customer.id;
 
@@ -35,11 +35,22 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
     enabled: isOpen,
   });
 
+  const { data: customerOrders, isLoading: loadingOrders } = useQuery({
+    queryKey: ['customerOrders', customerId],
+    queryFn: async () => {
+      const res = await getOrders(1, 100, undefined, customerId);
+      return res.data;
+    },
+    enabled: isOpen,
+  });
+
   const { data: serviceOrders, isLoading: loadingServices } = useQuery({
     queryKey: ['customerServices', customerId],
     queryFn: async () => {
+      if (customerOrders) {
+        return customerOrders.filter(order => order.items?.some((i: any) => i.product?.isService));
+      }
       const res = await getOrders(1, 100, undefined, customerId);
-      // Filter orders that have at least one service item
       return res.data.filter(order => order.items?.some((i: any) => i.product?.isService));
     },
     enabled: isOpen,
@@ -193,6 +204,19 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                   <div style={{ fontWeight: '600', color: '#1e293b' }}>{customer.address || 'Chưa cung cấp'}</div>
                 </div>
               </div>
+              <div style={{ display: 'flex', gap: '0.75rem', color: '#475569' }}>
+                <Clock size={18} style={{ flexShrink: 0, marginTop: '2px', color: '#6366f1' }} />
+                <div>
+                  <div style={{ color: '#94a3b8', fontSize: '0.75rem' }}>Ngày mua gần nhất</div>
+                  <div style={{ fontWeight: '600', color: '#1e293b' }}>
+                    {customerOrders && customerOrders.length > 0 
+                      ? `${new Date(customerOrders[0].createdAt).toLocaleDateString('vi-VN')} ${new Date(customerOrders[0].createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
+                      : customer.lastPurchaseDate 
+                        ? new Date(customer.lastPurchaseDate).toLocaleDateString('vi-VN')
+                        : 'Chưa có đơn hàng'}
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Wallet Section */}
@@ -266,21 +290,19 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
             
             {/* Tabs Selector */}
             <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border)', marginBottom: '1.5rem', paddingBottom: '0.25rem' }}>
-              {/*
               <button
-                onClick={() => setActiveTab('pets')}
+                onClick={() => setActiveTab('orders')}
                 style={{
                   padding: '0.75rem 1rem', border: 'none', backgroundColor: 'transparent',
                   fontWeight: '700', fontSize: '1rem', cursor: 'pointer',
-                  color: activeTab === 'pets' ? 'var(--primary)' : '#64748b',
-                  borderBottom: activeTab === 'pets' ? '3px solid var(--primary)' : '3px solid transparent',
+                  color: activeTab === 'orders' ? 'var(--primary)' : '#64748b',
+                  borderBottom: activeTab === 'orders' ? '3px solid var(--primary)' : '3px solid transparent',
                   transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '0.5rem'
                 }}
               >
-                <Dog size={18} />
-                Thú cưng ({pets?.length || 0})
+                <ShoppingBag size={18} />
+                Lịch sử mua hàng ({customerOrders?.length || 0})
               </button>
-              */}
               <button
                 onClick={() => setActiveTab('appointments')}
                 style={{
@@ -316,6 +338,84 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                 ... (Pets listing code hidden)
               )}
               */}
+              {activeTab === 'orders' && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '700', color: '#1e293b' }}>Lịch sử mua hàng</h4>
+                  </div>
+
+                  {loadingOrders ? (
+                    <div style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>Đang tải lịch sử đơn hàng...</div>
+                  ) : !customerOrders || customerOrders.length === 0 ? (
+                    <div style={{
+                      textAlign: 'center', padding: '4rem 2rem', color: '#94a3b8',
+                      border: '2px dashed var(--border)', borderRadius: '1rem'
+                    }}>
+                      <ShoppingBag size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
+                      <p style={{ margin: 0, fontWeight: '500' }}>Khách hàng này chưa phát sinh đơn mua hàng nào.</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {customerOrders.map((order) => {
+                        const orderDate = new Date(order.createdAt);
+                        const statusBadges: Record<string, { bg: string; text: string; label: string }> = {
+                          COMPLETED: { bg: 'rgba(16, 185, 129, 0.1)', text: '#059669', label: 'Đã hoàn thành' },
+                          PENDING: { bg: 'rgba(245, 158, 11, 0.1)', text: '#d97706', label: 'Chờ xử lý' },
+                          CANCELLED: { bg: 'rgba(239, 68, 68, 0.1)', text: '#dc2626', label: 'Đã hủy' },
+                          DRAFT: { bg: 'rgba(100, 116, 139, 0.1)', text: '#475569', label: 'Bản nháp' },
+                        };
+                        const badge = statusBadges[order.status] || { bg: '#f1f5f9', text: '#475569', label: order.status };
+
+                        return (
+                          <div key={order.id} style={{
+                            border: '1px solid var(--border)', borderRadius: '1rem', padding: '1.25rem',
+                            backgroundColor: 'white', display: 'flex', flexDirection: 'column', gap: '0.75rem',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.01)'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px dashed var(--border)', paddingBottom: '0.75rem' }}>
+                              <div>
+                                <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '1rem' }}>
+                                  Ngày mua: {orderDate.toLocaleDateString('vi-VN')} {orderDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                                <div style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '0.15rem' }}>
+                                  Mã HĐ: <strong style={{ color: '#6366f1' }}>{order.orderCode}</strong>
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <span style={{
+                                  padding: '0.25rem 0.75rem', borderRadius: '1rem', fontSize: '0.75rem', fontWeight: '700',
+                                  backgroundColor: badge.bg, color: badge.text
+                                }}>
+                                  {badge.label}
+                                </span>
+                                <div style={{ fontWeight: '800', color: '#059669', fontSize: '1.05rem', marginTop: '0.35rem' }}>
+                                  {formatCurrency(order.totalAmount)}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {order.items && order.items.length > 0 && (
+                              <div>
+                                <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#475569', marginBottom: '0.5rem' }}>Sản phẩm / Dịch vụ đã mua:</div>
+                                <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.875rem', color: '#334155' }}>
+                                  {order.items.map((item: any, idx: number) => (
+                                    <li key={idx} style={{ marginBottom: '0.25rem' }}>
+                                      <strong>{item.product?.name || `Sản phẩm #${item.productId}`}</strong>
+                                      {item.quantity > 1 ? ` (x${item.quantity})` : ''}
+                                      {item.unitPrice > 0 && ` - ${formatCurrency(item.unitPrice * item.quantity)}`}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {activeTab === 'appointments' && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>

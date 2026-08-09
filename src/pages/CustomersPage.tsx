@@ -311,6 +311,7 @@ const CustomersPage: React.FC = () => {
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Mã KH</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>{t('customers.table_name')}</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>{t('customers.table_contact')}</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Ngày mua gần nhất</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem' }}>Người tạo</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem', textAlign: 'right' }}>Tổng bán</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.875rem', textAlign: 'right' }}>Nợ cần thu hiện tại</th>
@@ -321,11 +322,11 @@ const CustomersPage: React.FC = () => {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('customers.fetching')}</td>
+                  <td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('customers.fetching')}</td>
                 </tr>
               ) : customers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('customers.no_customers')}</td>
+                  <td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('customers.no_customers')}</td>
                 </tr>
               ) : customers.map((customer: any) => (
                 <tr key={customer.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background-color 0.2s' }}>
@@ -374,6 +375,12 @@ const CustomersPage: React.FC = () => {
                         </div>
                       )}
                     </div>
+                  </td>
+                  {/* Ngày mua gần nhất */}
+                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: '#475569' }}>
+                    {customer.lastPurchaseDate 
+                      ? new Date(customer.lastPurchaseDate).toLocaleDateString('vi-VN') 
+                      : (customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('vi-VN') : 'Chưa có đơn')}
                   </td>
                   {/* Người tạo */}
                   <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: '#64748b' }}>

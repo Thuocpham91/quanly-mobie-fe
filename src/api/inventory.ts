@@ -54,6 +54,9 @@ export interface Product {
   units: ProductUnit[];
   usage?: string;
   basePrice?: number;
+  sellingPrice?: number;
+  salePrice?: number;
+  price?: number;
   branchPrices?: { id: string; branchId: string; price: number }[];
 }
 

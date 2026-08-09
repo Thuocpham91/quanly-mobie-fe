@@ -463,6 +463,11 @@ const POSPage: React.FC = () => {
                         <User size={14} style={{ color: '#d81b60', marginRight: '0.5rem' }} />
                         <span style={{ fontWeight: '600' }}>{c.fullName}</span>
                         <span style={{ color: '#64748b', marginLeft: '0.5rem', fontSize: '0.8rem' }}>({c.phone})</span>
+                        <span style={{ color: '#6366f1', marginLeft: 'auto', fontSize: '0.75rem', fontWeight: '500' }}>
+                          {c.lastPurchaseDate 
+                            ? `Ngày mua: ${new Date(c.lastPurchaseDate).toLocaleDateString('vi-VN')}` 
+                            : (c.createdAt ? `Ngày tạo: ${new Date(c.createdAt).toLocaleDateString('vi-VN')}` : 'Mới')}
+                        </span>
                       </div>
                     ))}
                   </div>
