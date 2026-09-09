@@ -37,8 +37,8 @@ const ProductsPage: React.FC = () => {
 
   // Fetch Data
   const { data: paginatedProducts, isLoading: loadingProducts } = useQuery<PaginatedResponse<Product>>({
-    queryKey: ['products', page],
-    queryFn: () => getProductsPaginated(page, limit),
+    queryKey: ['products', page, searchTerm],
+    queryFn: () => getProductsPaginated(page, limit, undefined, searchTerm.trim() || undefined),
   });
   const products = paginatedProducts?.data || [];
   const productsMeta = paginatedProducts?.meta;
@@ -86,7 +86,7 @@ const ProductsPage: React.FC = () => {
     },
     onSuccess: () => {
       if (activeTab === 'products') {
-        queryClient.invalidateQueries({ queryKey: ['products', page] });
+        queryClient.invalidateQueries({ queryKey: ['products'] });
       } else {
         queryClient.invalidateQueries({ queryKey: [activeTab === 'groups' ? 'itemGroups' : activeTab] });
       }
@@ -160,7 +160,10 @@ const ProductsPage: React.FC = () => {
               type="text" 
               placeholder={t('products.search_placeholder')} 
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
               style={{
                 width: '100%',
                 padding: '0.45rem 0.85rem 0.45rem 2.2rem',
@@ -377,7 +380,10 @@ const ProductsPage: React.FC = () => {
             type="text"
             placeholder="Tên, mã SP, mã vạch..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+            }}
             style={{
               width: '100%',
               padding: '0.6rem 0.8rem',

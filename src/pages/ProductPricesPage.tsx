@@ -47,7 +47,7 @@ const ProductPricesPage: React.FC = () => {
 
   const { data: paginatedProducts, isLoading: loadingProducts } = useQuery({
     queryKey: ['products50', searchTerm],
-    queryFn: () => inventoryApi.getProductsPaginated(1, 50, undefined, searchTerm.trim() || undefined),
+    queryFn: () => inventoryApi.getProductsPaginated(1, 1000, undefined, searchTerm.trim() || undefined),
   });
 
   const products: Product[] = paginatedProducts?.data || (Array.isArray(paginatedProducts) ? paginatedProducts : []);
@@ -86,7 +86,7 @@ const ProductPricesPage: React.FC = () => {
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (p.productCode && p.productCode.toLowerCase().includes(searchTerm.toLowerCase()))
-  ).slice(0, 50);
+  ).slice(0, 500);
 
   const handleSelectProduct = (product: Product) => {
     setSelectedProduct(product);

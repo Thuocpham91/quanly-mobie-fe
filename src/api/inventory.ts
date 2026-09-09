@@ -124,11 +124,29 @@ export interface ImportOrder {
 
 // Product APIs
 export const getProducts = async (context?: any): Promise<Product[]> => {
-  // React Query passes a context object; extract isService if provided
-  const isService = typeof context === 'object' && typeof context.isService === 'boolean' ? context.isService : undefined;
-  const url = isService !== undefined ? `/products?isService=${isService}` : '/products';
+  // React Query passes a context object or custom options; extract isService, search, limit if provided
+  let isService: boolean | undefined;
+  let search: string | undefined;
+  let limit = 10000;
+
+  if (context && typeof context === 'object') {
+    if (typeof context.isService === 'boolean') isService = context.isService;
+    if (typeof context.search === 'string') search = context.search;
+    if (typeof context.limit === 'number') limit = context.limit;
+  }
+
+  const query = new URLSearchParams();
+  query.append('page', '1');
+  query.append('limit', String(limit));
+  if (isService !== undefined) {
+    query.append('isService', String(isService));
+  }
+  if (search) {
+    query.append('search', search);
+  }
+  const url = `/products?${query.toString()}`;
   const response = await client.get<any>(url);
-  return response.data?.data || response.data || [];
+  return response.data?.data || (Array.isArray(response.data) ? response.data : []);
 };
 
 export const getProductsPaginated = async (page = 1, limit = 10, isService?: boolean, search?: string) => {

@@ -434,7 +434,7 @@ const InventoryImportPage: React.FC = () => {
     p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
     (p.barcode && p.barcode.includes(productSearch)) ||
     (p.productCode && p.productCode.toLowerCase().includes(productSearch.toLowerCase()))
-  ).slice(0, 50);
+  ).slice(0, 100);
 
   return (
     <div style={{ 
