@@ -1,3 +1,4 @@
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LoginPage from './pages/LoginPage';
@@ -28,6 +29,7 @@ import ReportsPage from './pages/ReportsPage';
 import PermissionGuard from './guards/PermissionGuard';
 
 import { BranchProvider } from './context/BranchContext';
+import { applyInterfaceScale, getStoredInterfaceScale } from './utils/interfaceScale';
 
 const queryClient = new QueryClient();
 
@@ -45,6 +47,10 @@ function P({ path, children }: { path: string; children: React.ReactNode }) {
 }
 
 function App() {
+  useEffect(() => {
+    applyInterfaceScale(getStoredInterfaceScale());
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <BranchProvider>

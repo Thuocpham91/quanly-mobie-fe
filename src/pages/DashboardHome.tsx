@@ -197,7 +197,26 @@ const DashboardHome: React.FC = () => {
     finally { setLoading(false); setRefreshing(false); }
   };
 
-  useEffect(() => { fetchData(); }, [startDate, endDate, selectedBranchId]);
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const result = await getDashboardStatistics(startDate, endDate, selectedBranchId, controller.signal);
+        setData(result);
+      } catch (err: any) {
+        if (err?.name !== 'CanceledError' && err?.code !== 'ERR_CANCELED') {
+          console.error("Dashboard fetch error:", err);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    };
+
+    loadData();
+    return () => controller.abort();
+  }, [startDate, endDate, selectedBranchId]);
 
   const quickRanges = [
     { label: t("dashboard.range_week"), getRange: () => { const now = new Date(); const s = new Date(now); s.setDate(now.getDate() - now.getDay() + 1); return [s.toISOString().split("T")[0], now.toISOString().split("T")[0]]; } },

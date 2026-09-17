@@ -38,11 +38,12 @@ export const getDashboardStatistics = async (
   startDate: string,
   endDate: string,
   branchId?: string,
+  signal?: AbortSignal,
 ): Promise<DashboardStatisticsResponse> => {
   const params: any = { startDate, endDate };
   if (branchId) {
     params.branchId = branchId;
   }
-  const response = await api.get('/dashboard/statistics', { params });
+  const response = await api.get('/dashboard/statistics', { params, signal });
   return response.data;
 };

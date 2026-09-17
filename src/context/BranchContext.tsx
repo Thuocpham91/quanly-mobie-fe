@@ -8,15 +8,9 @@ interface BranchContextType {
 const BranchContext = createContext<BranchContextType | undefined>(undefined);
 
 export const BranchProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
-
-  // Try to load from localStorage on mount
-  useEffect(() => {
-    const savedBranch = localStorage.getItem('selectedBranchId');
-    if (savedBranch) {
-      setSelectedBranchId(savedBranch);
-    }
-  }, []);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(() =>
+    localStorage.getItem('selectedBranchId') || ''
+  );
 
   // Save to localStorage when changed
   useEffect(() => {

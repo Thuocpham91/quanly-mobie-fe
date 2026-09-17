@@ -29,10 +29,15 @@ export interface Appointment {
   updatedAt: string;
 }
 
-export const getAppointments = async (branchId?: string, page: number = 1, limit: number = 10) => {
+export const getAppointments = async (
+  branchId?: string,
+  page: number = 1,
+  limit: number = 10,
+  signal?: AbortSignal,
+) => {
   let url = `/appointments?page=${page}&limit=${limit}`;
   if (branchId) url += `&branchId=${branchId}`;
-  const response = await client.get<PaginatedResponse<Appointment>>(url);
+  const response = await client.get<PaginatedResponse<Appointment>>(url, { signal });
   return response.data;
 };
 

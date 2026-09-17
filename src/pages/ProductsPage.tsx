@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Plus, Edit2, Trash2, Box, Layers, Tag, Ruler, SlidersHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -20,9 +20,19 @@ const ProductsPage: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'units' | 'groups'>('products');
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
+
+  // Debounce search: đợi 350ms sau khi người dùng ngừng gõ mới gọi API
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Search Drawer state & filters
   const [isSearchDrawerOpen, setIsSearchDrawerOpen] = useState(false);
@@ -35,10 +45,10 @@ const ProductsPage: React.FC = () => {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | undefined>();
 
-  // Fetch Data
+  // Fetch Data — tìm kiếm được thực hiện hoàn toàn qua API, không lọc phía frontend
   const { data: paginatedProducts, isLoading: loadingProducts } = useQuery<PaginatedResponse<Product>>({
-    queryKey: ['products', page, searchTerm],
-    queryFn: () => getProductsPaginated(page, limit, undefined, searchTerm.trim() || undefined),
+    queryKey: ['products', page, debouncedSearch],
+    queryFn: () => getProductsPaginated(page, limit, undefined, debouncedSearch || undefined),
   });
   const products = paginatedProducts?.data || [];
   const productsMeta = paginatedProducts?.meta;
@@ -123,14 +133,9 @@ const ProductsPage: React.FC = () => {
     setStockFilter('all');
   };
 
+  // Các bộ lọc phụ (category, unit, group, stock) vẫn lọc trên client vì API chưa hỗ trợ,
+  // còn searchTerm (tên/barcode/mã) được xử lý hoàn toàn bởi API.
   const filteredProducts = products.filter((p: any) => {
-    const q = searchTerm.toLowerCase().trim();
-    const matchesSearch =
-      !q ||
-      p.name?.toLowerCase().includes(q) ||
-      (p.barcode && p.barcode.includes(q)) ||
-      (p.productCode && p.productCode.toLowerCase().includes(q));
-
     const matchesCategory = !selectedCategory || p.categoryId === selectedCategory || p.category?.id === selectedCategory;
     const matchesUnit = !selectedUnit || p.unitId === selectedUnit || p.unit?.id === selectedUnit;
     const matchesGroup = !selectedGroup || p.groupId === selectedGroup || p.group?.id === selectedGroup;
@@ -141,7 +146,7 @@ const ProductsPage: React.FC = () => {
       stockFilter === 'in_stock' ? currentStock > 0 :
       stockFilter === 'out_of_stock' ? currentStock <= 0 : true;
 
-    return matchesSearch && matchesCategory && matchesUnit && matchesGroup && matchesStock;
+    return matchesCategory && matchesUnit && matchesGroup && matchesStock;
   });
 
   return (
@@ -162,7 +167,6 @@ const ProductsPage: React.FC = () => {
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
-                setPage(1);
               }}
               style={{
                 width: '100%',

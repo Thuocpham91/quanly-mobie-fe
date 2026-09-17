@@ -4,10 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authApi } from '../api/auth';
 import LanguageSwitcher from '../components/LanguageSwitcher';
+import { useBranchContext } from '../context/BranchContext';
+import { applyInterfaceScale, getStoredInterfaceScale } from '../utils/interfaceScale';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { setSelectedBranchId } = useBranchContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
@@ -35,6 +38,8 @@ const LoginPage: React.FC = () => {
       const data = await authApi.login({ email, password });
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
+      const userKey = data.user?.id ? `user_${data.user.id}` : (data.user?.email ? `user_${data.user.email}` : null);
+      applyInterfaceScale(getStoredInterfaceScale(userKey), userKey);
       
       if (rememberMe) {
         localStorage.setItem('rememberedEmail', email);
@@ -47,20 +52,18 @@ const LoginPage: React.FC = () => {
       // Tự động chọn chi nhánh dựa trên quyền của user
       const userBranchRoles = data.user?.userBranchRoles || [];
       const branchIds = [...new Set(userBranchRoles.map((ubr: any) => ubr.branchId))] as string[];
+      let nextBranchId = '';
 
       if (branchIds.length === 1) {
         // Chỉ có 1 chi nhánh → tự động vào chi nhánh đó
-        localStorage.setItem('selectedBranchId', branchIds[0]);
+        nextBranchId = branchIds[0];
       } else if (branchIds.length > 1) {
         // Nhiều chi nhánh → giữ chi nhánh đã lưu trước đó, nếu không hợp lệ thì xoá
         const savedBranch = localStorage.getItem('selectedBranchId');
-        if (!savedBranch || !branchIds.includes(savedBranch)) {
-          localStorage.removeItem('selectedBranchId');
-        }
-      } else {
-        // Không có chi nhánh nào → xoá
-        localStorage.removeItem('selectedBranchId');
+        nextBranchId = savedBranch && branchIds.includes(savedBranch) ? savedBranch : '';
       }
+
+      setSelectedBranchId(nextBranchId);
 
       navigate('/admin');
     } catch (err: any) {

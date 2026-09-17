@@ -37,8 +37,11 @@ import {
   AlignLeft,
   TrendingUp,
   FileText,
-  BarChart3
+  BarChart3,
+  ZoomIn
 } from 'lucide-react';
+import InterfaceScaleControl from '../components/InterfaceScaleControl';
+import { useInterfaceScale } from '../utils/interfaceScale';
 
 const DashboardLayout: React.FC = () => {
   const location = useLocation();
@@ -54,6 +57,8 @@ const DashboardLayout: React.FC = () => {
   const [isCollapsed, setIsCollapsed] = useState(window.innerWidth < 768);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isScaleMenuOpen, setIsScaleMenuOpen] = useState(false);
+  const { scale } = useInterfaceScale();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['Tổng quan', 'Bán hàng']));
   const [toasts, setToasts] = useState<{
     id: string;
@@ -495,6 +500,59 @@ const DashboardLayout: React.FC = () => {
 
             {/* Ẩn LanguageSwitcher trên mobile để tiết kiệm chỗ */}
             {!isMobile && <LanguageSwitcher />}
+
+            {/* Quick Zoom / Scale Button */}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsScaleMenuOpen(!isScaleMenuOpen);
+                  setIsUserMenuOpen(false);
+                }}
+                title="Chỉnh cỡ giao diện (Phóng to / Thu nhỏ)"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  padding: isMobile ? '0.35rem 0.55rem' : '0.45rem 0.75rem',
+                  borderRadius: '0.5rem',
+                  backgroundColor: Math.round(scale * 100) !== 100 ? '#eef2ff' : 'rgba(99, 102, 241, 0.08)',
+                  color: Math.round(scale * 100) !== 100 ? '#4f46e5' : 'var(--primary)',
+                  fontWeight: '700',
+                  fontSize: isMobile ? '0.75rem' : '0.82rem',
+                  border: Math.round(scale * 100) !== 100 ? '1px solid #c7d2fe' : '1px solid transparent',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s'
+                }}
+              >
+                <ZoomIn size={15} />
+                <span>{Math.round(scale * 100)}%</span>
+              </button>
+
+              {isScaleMenuOpen && (
+                <>
+                  <div
+                    onClick={() => setIsScaleMenuOpen(false)}
+                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 998 }}
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 8px)',
+                    right: 0,
+                    width: isMobile ? '290px' : '340px',
+                    backgroundColor: 'white',
+                    borderRadius: '0.875rem',
+                    boxShadow: '0 20px 40px -8px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06)',
+                    padding: '1rem',
+                    zIndex: 999,
+                    animation: 'dropdownSlideIn 0.18s cubic-bezier(0.16,1,0.3,1)',
+                  }}>
+                    <InterfaceScaleControl onClose={() => setIsScaleMenuOpen(false)} />
+                  </div>
+                </>
+              )}
+            </div>
+
             {!isMobile && (
               <button style={{ position: 'relative', background: 'none', color: 'var(--foreground)' }}>
                 <Bell size={20} />
@@ -512,7 +570,10 @@ const DashboardLayout: React.FC = () => {
             )}
             <div style={{ position: 'relative' }}>
               <div 
-                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                onClick={() => {
+                  setIsUserMenuOpen(!isUserMenuOpen);
+                  setIsScaleMenuOpen(false);
+                }}
                 style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.4rem', borderRadius: '0.5rem', transition: 'background-color 0.2s' }}
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(99, 102, 241, 0.05)'}
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -553,7 +614,7 @@ const DashboardLayout: React.FC = () => {
                     position: 'absolute',
                     top: 'calc(100% + 12px)',
                     right: 0,
-                    width: '260px',
+                    width: '280px',
                     backgroundColor: 'white',
                     borderRadius: '1rem',
                     boxShadow: '0 20px 40px -8px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05)',
@@ -600,6 +661,11 @@ const DashboardLayout: React.FC = () => {
                           })()}
                         </div>
                       </div>
+                    </div>
+
+                    {/* Cỡ giao diện cá nhân trong user menu */}
+                    <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid #f1f5f9', backgroundColor: '#f8fafc' }}>
+                      <InterfaceScaleControl compact />
                     </div>
 
                     {/* Menu items */}

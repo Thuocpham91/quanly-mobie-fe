@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Settings, Plus, Edit2, Trash2, LayoutGrid, Tags, X, QrCode, Save } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import InterfaceScaleControl from '../components/InterfaceScaleControl';
 import { 
   getCategories, createCategory, updateCategory, deleteCategory,
   getItemGroups, createItemGroup, updateItemGroup, deleteItemGroup,
@@ -128,6 +129,17 @@ const SettingsPage: React.FC = () => {
             {addButtonLabel}
           </button>
         )}
+      </div>
+
+      <div style={{
+        backgroundColor: 'white',
+        border: '1px solid #e2e8f0',
+        borderRadius: '1rem',
+        padding: '1.25rem 1.5rem',
+        marginBottom: '1.5rem',
+        boxShadow: '0 4px 12px rgba(15, 23, 42, 0.04)'
+      }}>
+        <InterfaceScaleControl />
       </div>
 
       {/* Tabs */}

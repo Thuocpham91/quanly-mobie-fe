@@ -29,7 +29,7 @@ const AppointmentsPage: React.FC = () => {
   // Fetch appointments for List View
   const { data: paginatedData, isLoading } = useQuery({
     queryKey: ['appointments', selectedBranchId, page, statusFilter],
-    queryFn: () => getAppointments(selectedBranchId, page, 10),
+    queryFn: ({ signal }) => getAppointments(selectedBranchId, page, 10, signal),
   });
 
   const appointments = paginatedData?.data || [];
@@ -55,7 +55,7 @@ const AppointmentsPage: React.FC = () => {
   // Fetch appointments for Calendar View (limit 1000 to get a large set)
   const { data: calendarData, isLoading: isCalendarLoading } = useQuery({
     queryKey: ['appointments_calendar', selectedBranchId],
-    queryFn: () => getAppointments(selectedBranchId, 1, 1000),
+    queryFn: ({ signal }) => getAppointments(selectedBranchId, 1, 1000, signal),
     enabled: viewMode === 'calendar'
   });
 
