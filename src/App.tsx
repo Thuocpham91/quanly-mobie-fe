@@ -13,6 +13,7 @@ import InventoryPage from './pages/InventoryPage';
 import InventoryImportPage from './pages/InventoryImportPage';
 import DistributorsPage from './pages/DistributorsPage';
 import ProductsPage from './pages/ProductsPage';
+import ProductDetailPage from './pages/ProductDetailPage';
 import RolesPage from './pages/RolesPage';
 import SettingsPage from './pages/SettingsPage';
 import ProductPricesPage from './pages/ProductPricesPage';
@@ -25,6 +26,7 @@ import StocktakeListPage from './pages/StocktakeListPage';
 import StocktakeFormPage from './pages/StocktakeFormPage';
 import InventoryTransferPage from './pages/InventoryTransferPage';
 import InventoryOrderDetailPage from './pages/InventoryOrderDetailPage';
+import StockOverviewPage from './pages/StockOverviewPage';
 import ReportsPage from './pages/ReportsPage';
 import PermissionGuard from './guards/PermissionGuard';
 
@@ -65,10 +67,12 @@ function App() {
               <Route path="inventory"               element={<P path="/admin/inventory"><InventoryPage /></P>} />
               <Route path="inventory/import"        element={<P path="/admin/inventory/import"><InventoryImportPage /></P>} />
               <Route path="inventory/orders/:id"    element={<P path="/admin/inventory"><InventoryOrderDetailPage /></P>} />
+              <Route path="inventory/stock"          element={<P path="/admin/inventory"><StockOverviewPage /></P>} />
               <Route path="inventory/transfer"      element={<P path="/admin/inventory/transfer"><InventoryTransferPage /></P>} />
               <Route path="inventory/history"       element={<P path="/admin/inventory/history"><StockHistoryPage /></P>} />
               <Route path="inventory/stocktakes"    element={<P path="/admin/inventory/stocktakes"><StocktakeListPage /></P>} />
               <Route path="inventory/stocktakes/:id"element={<P path="/admin/inventory/stocktakes"><StocktakeFormPage /></P>} />
+              <Route path="products/:id"            element={<P path="/admin/products"><ProductDetailPage /></P>} />
               <Route path="products"                element={<P path="/admin/products"><ProductsPage /></P>} />
               <Route path="product-prices"          element={<P path="/admin/product-prices"><ProductPricesPage /></P>} />
               <Route path="pos"                     element={<P path="/admin/pos"><POSPage /></P>} />

@@ -38,7 +38,8 @@ import {
   TrendingUp,
   FileText,
   BarChart3,
-  ZoomIn
+  ZoomIn,
+  Layers
 } from 'lucide-react';
 import InterfaceScaleControl from '../components/InterfaceScaleControl';
 import { useInterfaceScale } from '../utils/interfaceScale';
@@ -209,6 +210,7 @@ const DashboardLayout: React.FC = () => {
       items: [
         { path: '/admin/products',              icon: <Box size={18} />,            label: t('common.products'),     permission: 'products.view' },
         { path: '/admin/product-prices',        icon: <Tags size={18} />,           label: 'Quản lý giá',            permission: 'products.create_edit' },
+        { path: '/admin/inventory/stock',       icon: <Layers size={18} />,         label: 'Tồn kho',                permission: 'inventory.import' },
         { path: '/admin/inventory',             icon: <Package size={18} />,        label: t('common.inventory'),    permission: 'inventory.import' },
         { path: '/admin/inventory/stocktakes',  icon: <ClipboardCheck size={18} />, label: 'Kiểm kho',               permission: 'inventory.import' },
         { path: '/admin/inventory/transfer',    icon: <ArrowLeftRight size={18} />, label: 'Xuất & Chuyển kho',      permission: 'inventory.import' },

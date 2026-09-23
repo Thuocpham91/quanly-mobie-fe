@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowLeftRight, 
@@ -54,6 +54,14 @@ const InventoryTransferPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { selectedBranchId } = useBranchContext();
   const [activeTab, setActiveTab] = useState<'transfer' | 'export' | 'pending'>('transfer');
+  const hasBranchSelection = Boolean(selectedBranchId);
+
+  useEffect(() => {
+    if (selectedBranchId) {
+      setTransferFromBranch(selectedBranchId);
+      setExportBranch(selectedBranchId);
+    }
+  }, [selectedBranchId]);
 
   // Transfer Form State
   const [transferFromBranch, setTransferFromBranch] = useState(selectedBranchId || '');
@@ -113,10 +121,13 @@ const InventoryTransferPage: React.FC = () => {
   );
 
   // Fetch transfers
-  const { data: transfers = [], isLoading: isLoadingTransfers } = useQuery({
+  const { data: rawTransfers = [], isLoading: isLoadingTransfers } = useQuery({
     queryKey: ['transfers', selectedBranchId],
     queryFn: () => getTransfers(selectedBranchId),
+    enabled: !!selectedBranchId,
   });
+
+  const transfers = Array.isArray(rawTransfers) ? rawTransfers : rawTransfers?.data || [];
 
   // Mutations
   const transferMutation = useMutation({
@@ -198,20 +209,33 @@ const InventoryTransferPage: React.FC = () => {
   });
 
   // Autocomplete products filtering
-  const filteredTransferProducts = transferInventory.filter((item: any) => 
-    item.product.name.toLowerCase().includes(transferSearch.toLowerCase()) ||
-    (item.product.productCode && item.product.productCode.toLowerCase().includes(transferSearch.toLowerCase())) ||
-    (item.product.barcode && item.product.barcode.includes(transferSearch))
-  );
+  const filteredTransferProducts = (transferInventory || []).filter((item: any) => {
+    const productName = item?.product?.name || '';
+    const productCode = item?.product?.productCode || '';
+    const barcode = item?.product?.barcode || '';
+    const query = transferSearch.toLowerCase();
+    return productName.toLowerCase().includes(query) ||
+      productCode.toLowerCase().includes(query) ||
+      barcode.toLowerCase().includes(query);
+  });
 
-  const filteredExportProducts = exportInventory.filter((item: any) => 
-    item.product.name.toLowerCase().includes(exportSearch.toLowerCase()) ||
-    (item.product.productCode && item.product.productCode.toLowerCase().includes(exportSearch.toLowerCase())) ||
-    (item.product.barcode && item.product.barcode.includes(exportSearch))
-  );
+  const filteredExportProducts = (exportInventory || []).filter((item: any) => {
+    const productName = item?.product?.name || '';
+    const productCode = item?.product?.productCode || '';
+    const barcode = item?.product?.barcode || '';
+    const query = exportSearch.toLowerCase();
+    return productName.toLowerCase().includes(query) ||
+      productCode.toLowerCase().includes(query) ||
+      barcode.toLowerCase().includes(query);
+  });
 
   // Helper functions for items selection
   const handleAddTransferItem = (inventoryItem: any) => {
+    if (!inventoryItem?.product?.id) {
+      alert('Dữ liệu sản phẩm không hợp lệ.');
+      return;
+    }
+
     const existing = transferItems.find(i => i.productId === inventoryItem.product.id);
     if (existing) {
       if (existing.quantity < inventoryItem.totalStock) {
@@ -230,7 +254,7 @@ const InventoryTransferPage: React.FC = () => {
       }
       setTransferItems([...transferItems, {
         productId: inventoryItem.product.id,
-        productName: inventoryItem.product.name,
+        productName: inventoryItem.product.name || 'Sản phẩm',
         productCode: inventoryItem.product.productCode,
         barcode: inventoryItem.product.barcode,
         unitName: inventoryItem.product.unit?.name || 'Đơn vị',
@@ -257,6 +281,11 @@ const InventoryTransferPage: React.FC = () => {
   };
 
   const handleAddExportItem = (inventoryItem: any) => {
+    if (!inventoryItem?.product?.id) {
+      alert('Dữ liệu sản phẩm không hợp lệ.');
+      return;
+    }
+
     const existing = exportItems.find(i => i.productId === inventoryItem.product.id);
     if (existing) {
       if (existing.quantity < inventoryItem.totalStock) {
@@ -275,7 +304,7 @@ const InventoryTransferPage: React.FC = () => {
       }
       setExportItems([...exportItems, {
         productId: inventoryItem.product.id,
-        productName: inventoryItem.product.name,
+        productName: inventoryItem.product.name || 'Sản phẩm',
         productCode: inventoryItem.product.productCode,
         barcode: inventoryItem.product.barcode,
         unitName: inventoryItem.product.unit?.name || 'Đơn vị',
@@ -374,6 +403,12 @@ const InventoryTransferPage: React.FC = () => {
         <div className="card" style={{ padding: 0, overflow: 'visible', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '0.75rem' }}>
           
           {/* Tab Navigation */}
+          {!hasBranchSelection && (
+            <div style={{ padding: '0.75rem 1rem', backgroundColor: '#fff7ed', borderBottom: '1px solid #fed7aa', color: '#9a5b00', fontWeight: 600 }}>
+              Vui lòng chọn chi nhánh trước khi thực hiện chuyển kho hoặc xuất kho.
+            </div>
+          )}
+
           <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc', borderTopLeftRadius: '0.75rem', borderTopRightRadius: '0.75rem' }}>
             <button 
               onClick={() => setActiveTab('transfer')}
@@ -412,7 +447,7 @@ const InventoryTransferPage: React.FC = () => {
               }}
             >
               <Info size={18} />
-              Yêu cầu chờ nhận ({transfers.filter(t => t.status === 'PENDING' && t.toBranchId === selectedBranchId).length})
+              Yêu cầu chờ nhận ({transfers.filter((t: any) => t.status === 'PENDING' && t.toBranchId === selectedBranchId).length})
             </button>
           </div>
 
@@ -503,10 +538,11 @@ const InventoryTransferPage: React.FC = () => {
                         <div style={{ padding: '0.75rem 1rem', color: '#64748b' }}>Không tìm thấy sản phẩm trong kho</div>
                       ) : (
                         filteredTransferProducts.map((item: any) => {
-                          const isSelected = transferItems.some(i => i.productId === item.product.id);
+                          const productId = item?.product?.id;
+                          const isSelected = productId ? transferItems.some(i => i.productId === productId) : false;
                           return (
                             <div 
-                              key={item.product.id}
+                              key={productId || Math.random()}
                               onClick={() => handleAddTransferItem(item)}
                               style={{
                                 padding: '0.75rem 1rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9',
@@ -517,11 +553,11 @@ const InventoryTransferPage: React.FC = () => {
                             >
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
-                                  <span style={{ fontWeight: '600', color: '#1e293b' }}>{item.product.name}</span>
-                                  <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '0.5rem' }}>({item.product.productCode || 'Không có mã'})</span>
+                                  <span style={{ fontWeight: '600', color: '#1e293b' }}>{item.product?.name || 'Sản phẩm'}</span>
+                                  <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '0.5rem' }}>({item.product?.productCode || 'Không có mã'})</span>
                                 </div>
                                 <span style={{ fontSize: '0.85rem', color: item.totalStock > 0 ? '#10b981' : '#ef4444', fontWeight: '600' }}>
-                                  Tồn: {item.totalStock} {item.product.unit?.name || 'Đơn vị'}
+                                  Tồn: {item.totalStock} {item.product?.unit?.name || 'Đơn vị'}
                                 </span>
                               </div>
                             </div>
@@ -672,10 +708,11 @@ const InventoryTransferPage: React.FC = () => {
                         <div style={{ padding: '0.75rem 1rem', color: '#64748b' }}>Không tìm thấy sản phẩm trong kho</div>
                       ) : (
                         filteredExportProducts.map((item: any) => {
-                          const isSelected = exportItems.some(i => i.productId === item.product.id);
+                          const productId = item?.product?.id;
+                          const isSelected = productId ? exportItems.some(i => i.productId === productId) : false;
                           return (
                             <div 
-                              key={item.product.id}
+                              key={productId || Math.random()}
                               onClick={() => handleAddExportItem(item)}
                               style={{
                                 padding: '0.75rem 1rem', cursor: 'pointer', borderBottom: '1px solid #f1f5f9',
@@ -686,11 +723,11 @@ const InventoryTransferPage: React.FC = () => {
                             >
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <div>
-                                  <span style={{ fontWeight: '600', color: '#1e293b' }}>{item.product.name}</span>
-                                  <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '0.5rem' }}>({item.product.productCode || 'Không có mã'})</span>
+                                  <span style={{ fontWeight: '600', color: '#1e293b' }}>{item.product?.name || 'Sản phẩm'}</span>
+                                  <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '0.5rem' }}>({item.product?.productCode || 'Không có mã'})</span>
                                 </div>
                                 <span style={{ fontSize: '0.85rem', color: item.totalStock > 0 ? '#10b981' : '#ef4444', fontWeight: '600' }}>
-                                  Tồn: {item.totalStock} {item.product.unit?.name || 'Đơn vị'}
+                                  Tồn: {item.totalStock} {item.product?.unit?.name || 'Đơn vị'}
                                 </span>
                               </div>
                             </div>
@@ -912,9 +949,9 @@ const InventoryTransferPage: React.FC = () => {
                                   {transfer.items.map((item: any) => (
                                     <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                                       <td style={{ padding: '0.5rem 0.75rem', fontWeight: '500', color: '#334155' }}>
-                                        {item.product?.name}
+                                        {item.product?.name || 'Sản phẩm'}
                                         {item.product?.productCode && (
-                                          <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '0.5rem' }}>({item.product.productCode})</span>
+                                          <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '0.5rem' }}>({item.product?.productCode})</span>
                                         )}
                                       </td>
                                       <td style={{ padding: '0.5rem 0.75rem', textAlign: 'center', fontWeight: '600', color: '#1e293b' }}>
@@ -1049,7 +1086,7 @@ const InventoryTransferPage: React.FC = () => {
                           {log.product?.productCode && (
                             <div style={{ fontSize: '0.75rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '0.2rem', marginTop: '0.1rem' }}>
                               <Tag size={12} />
-                              {log.product.productCode}
+                              {log.product?.productCode || 'Không có mã'}
                             </div>
                           )}
                         </td>

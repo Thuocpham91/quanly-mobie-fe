@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, Plus, Edit2, Trash2, Box, Layers, Tag, Ruler, SlidersHorizontal } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Box, Layers, Tag, Ruler, SlidersHorizontal, FileSpreadsheet, Eye } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import { type PaginatedResponse } from '../api/client';
 import { 
   getProductsPaginated, deleteProduct, type Product,
-  createProduct, updateProduct,
+  createProduct, updateProduct, importProductsExcel,
   getCategories, deleteCategory,
   getUnits, deleteUnit,
   getItemGroups, deleteItemGroup,
@@ -18,6 +20,7 @@ import { useBranchContext } from '../context/BranchContext';
 
 const ProductsPage: React.FC = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -44,10 +47,67 @@ const ProductsPage: React.FC = () => {
   // Modals state
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | undefined>();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResults, setImportResults] = useState<{ success: number; failed: { rowNum: number; name: string; productCode: string; reason: string }[] } | null>(null);
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    setImportResults(null);
+
+    try {
+      const response = await importProductsExcel(file, selectedBranchId || undefined);
+      const failed = (response.failed || []).map((item: any) => ({
+        rowNum: item.rowNum ?? 0,
+        name: item.name || item.productName || 'N/A',
+        productCode: item.productCode || item.barcode || 'N/A',
+        reason: item.reason || 'Không xác định',
+      }));
+
+      setImportResults({ success: response.success ?? 0, failed });
+      if ((response.success ?? 0) > 0) {
+        alert(`Import thành công ${response.success} sản phẩm`);
+      }
+      if (failed.length > 0) {
+        alert(`Có ${failed.length} dòng không import được. Vui lòng kiểm tra lại file Excel.`);
+      }
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['importOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['productImportHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
+    } catch (error: any) {
+      const errMsg = error?.response?.data?.message || error?.message || 'Có lỗi xảy ra khi import sản phẩm';
+      alert(Array.isArray(errMsg) ? errMsg.join('; ') : errMsg);
+    } finally {
+      setIsImporting(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDownloadImportErrors = () => {
+    if (!importResults || importResults.failed.length === 0) return;
+
+    const exportData = importResults.failed.map((row, idx) => ({
+      STT: idx + 1,
+      DONG: row.rowNum,
+      TEN_SAN_PHAM: row.name,
+      MA_SP: row.productCode,
+      LY_DO: row.reason,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Errors');
+    XLSX.writeFile(wb, `product_import_errors_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 
   // Fetch Data — tìm kiếm được thực hiện hoàn toàn qua API, không lọc phía frontend
   const { data: paginatedProducts, isLoading: loadingProducts } = useQuery<PaginatedResponse<Product>>({
-    queryKey: ['products', page, debouncedSearch],
+    queryKey: ['products', page, limit, debouncedSearch],
     queryFn: () => getProductsPaginated(page, limit, undefined, debouncedSearch || undefined),
   });
   const products = paginatedProducts?.data || [];
@@ -133,8 +193,6 @@ const ProductsPage: React.FC = () => {
     setStockFilter('all');
   };
 
-  // Các bộ lọc phụ (category, unit, group, stock) vẫn lọc trên client vì API chưa hỗ trợ,
-  // còn searchTerm (tên/barcode/mã) được xử lý hoàn toàn bởi API.
   const filteredProducts = products.filter((p: any) => {
     const matchesCategory = !selectedCategory || p.categoryId === selectedCategory || p.category?.id === selectedCategory;
     const matchesUnit = !selectedUnit || p.unitId === selectedUnit || p.unit?.id === selectedUnit;
@@ -217,6 +275,37 @@ const ProductsPage: React.FC = () => {
             )}
           </button>
 
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            ref={fileInputRef}
+            onChange={handleImportExcel}
+            style={{ display: 'none' }}
+          />
+
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isImporting}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
+          >
+            <FileSpreadsheet size={16} />
+            {isImporting ? 'Đang import...' : 'Import Excel'}
+          </button>
+
+          {importResults && importResults.failed.length > 0 && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleDownloadImportErrors}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
+            >
+              <FileSpreadsheet size={16} />
+              Tải lỗi ({importResults.failed.length})
+            </button>
+          )}
+
           <button 
             className="btn-primary" 
             onClick={() => { setEditingProduct(undefined); setIsProductModalOpen(true); }}
@@ -244,12 +333,19 @@ const ProductsPage: React.FC = () => {
               <th style={{ padding: '1rem' }}>{t('products.table_stt')}</th>
               {activeTab === 'products' ? (
                 <>
-                  <th style={{ padding: '1rem' }}>{t('products.table_barcode')}</th>
-                  <th style={{ padding: '1rem' }}>{t('products.table_name')}</th>
-                  <th style={{ padding: '1rem' }}>{t('products.table_category')}</th>
-                  <th style={{ padding: '1rem' }}>{t('products.table_unit')}</th>
+                  <th style={{ padding: '1rem' }}>Mã SP</th>
+                  <th style={{ padding: '1rem' }}>Tên</th>
+                  <th style={{ padding: '1rem' }}>Danh mục</th>
+                  <th style={{ padding: '1rem' }}>Đơn vị</th>
+                  <th style={{ padding: '1rem' }}>Nhà SX</th>
+                  <th style={{ padding: '1rem' }}>Giá gốc</th>
+                  <th style={{ padding: '1rem' }}>Giá nhập</th>
+                  <th style={{ padding: '1rem', textAlign: 'center' }}>SL</th>
+                  <th style={{ padding: '1rem' }}>Tổng tiền</th>
+                  <th style={{ padding: '1rem' }}>Còn trả NCC</th>
+                  <th style={{ padding: '1rem' }}>Tiền trả NCC</th>
+                  <th style={{ padding: '1rem' }}>Ghi chú</th>
                   <th style={{ padding: '1rem', textAlign: 'center' }}>{t('products.table_stock')}</th>
-                  <th style={{ padding: '1rem' }}>{t('products.table_manufacturer')}</th>
                 </>
               ) : (
                 <>
@@ -263,61 +359,96 @@ const ProductsPage: React.FC = () => {
           <tbody>
             {loadingProducts ? (
               <tr>
-                <td colSpan={activeTab === 'products' ? 8 : 4} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+                <td colSpan={activeTab === 'products' ? 14 : 4} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
                   {t('products.loading')}
                 </td>
               </tr>
             ) : activeTab === 'products' ? (
               filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={14} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
                     {t('products.no_products')}
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map((p: any, idx: number) => (
-                  <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '1rem', color: '#64748b' }}>{idx + 1}</td>
-                    <td style={{ padding: '1rem' }}>
-                      <div style={{ fontWeight: '600', color: '#1e293b' }}>{p.productCode || '--'}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.barcode || ''}</div>
-                    </td>
-                    <td style={{ padding: '1rem', fontWeight: '500' }}>
-                      {p.name}
-                      {p.isService && (
-                        <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', padding: '0.1rem 0.4rem', backgroundColor: '#e0e7ff', color: '#4f46e5', borderRadius: '4px' }}>
-                          {t('products.service_badge')}
+                filteredProducts.map((p: any, idx: number) => {
+                  const basePrice = Number(p.basePrice ?? p.importPrice ?? 0);
+                  const importPrice = Number(p.importPrice ?? p.basePrice ?? 0);
+                  const quantity = Number(p.quantity ?? 0);
+                  const totalAmount = Number(p.totalAmount ?? (quantity * importPrice));
+                  const canTraNcc = Number(p.canTraNcc ?? 0);
+                  const tienTraNcc = Number(p.tienTraNcc ?? 0);
+                  const fullProductName = p.name || '--';
+                  const displayProductName = fullProductName.length > 10 ? `${fullProductName.slice(0, 10)}...` : fullProductName;
+
+                  return (
+                    <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '1rem', color: '#64748b' }}>{idx + 1}</td>
+                      <td style={{ padding: '1rem' }}>
+                        <div style={{ fontWeight: '600', color: '#1e293b' }}>{p.productCode || '--'}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.barcode || ''}</div>
+                      </td>
+                      <td
+                        style={{
+                          padding: '1rem',
+                          fontWeight: '500',
+                          minWidth: '220px',
+                          maxWidth: '260px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                        title={fullProductName}
+                      >
+                        <span
+                          onClick={() => navigate(`/admin/products/${p.id}`)}
+                          style={{ display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'middle', color: '#2563eb', cursor: 'pointer' }}
+                        >
+                          {displayProductName}
                         </span>
-                      )}
-                      {p.hasImei && (
-                        <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', padding: '0.1rem 0.4rem', backgroundColor: '#ede9fe', color: '#6d28d9', borderRadius: '4px', fontWeight: 600 }}>
-                          IMEI
+                        {p.isService && (
+                          <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', padding: '0.1rem 0.4rem', backgroundColor: '#e0e7ff', color: '#4f46e5', borderRadius: '4px', verticalAlign: 'middle' }}>
+                            {t('products.service_badge')}
+                          </span>
+                        )}
+                        {p.hasImei && (
+                          <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', padding: '0.1rem 0.4rem', backgroundColor: '#ede9fe', color: '#6d28d9', borderRadius: '4px', fontWeight: 600, verticalAlign: 'middle' }}>
+                            IMEI
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '1rem', color: '#64748b' }}>{p.category?.name || '--'}</td>
+                      <td style={{ padding: '1rem', color: '#64748b' }}>{p.unit?.name || '--'}</td>
+                      <td style={{ padding: '1rem', color: '#64748b' }}>{p.manufacturer || '--'}</td>
+                      <td style={{ padding: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{basePrice ? basePrice.toLocaleString('vi-VN') : '--'}</td>
+                      <td style={{ padding: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{importPrice ? importPrice.toLocaleString('vi-VN') : '--'}</td>
+                      <td style={{ padding: '1rem', textAlign: 'center', color: '#64748b' }}>{quantity}</td>
+                      <td style={{ padding: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{totalAmount ? totalAmount.toLocaleString('vi-VN') : '--'}</td>
+                      <td style={{ padding: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{canTraNcc ? canTraNcc.toLocaleString('vi-VN') : '--'}</td>
+                      <td style={{ padding: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{tienTraNcc ? tienTraNcc.toLocaleString('vi-VN') : '--'}</td>
+                      <td style={{ padding: '1rem', color: '#64748b', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.note || ''}>{p.note || '--'}</td>
+                      <td style={{ padding: '1rem', textAlign: 'center' }}>
+                        <span style={{ 
+                          fontWeight: '700', 
+                          color: (stockMap[p.id] || 0) > 0 ? '#10b981' : '#ef4444',
+                          backgroundColor: (stockMap[p.id] || 0) > 0 ? '#ecfdf5' : '#fef2f2',
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '1rem',
+                          fontSize: '0.875rem'
+                        }}>
+                          {stockMap[p.id] || 0}
                         </span>
-                      )}
-                    </td>
-                    <td style={{ padding: '1rem', color: '#64748b' }}>{p.category?.name || '--'}</td>
-                    <td style={{ padding: '1rem', color: '#64748b' }}>{p.unit?.name || '--'}</td>
-                    <td style={{ padding: '1rem', textAlign: 'center' }}>
-                      <span style={{ 
-                        fontWeight: '700', 
-                        color: (stockMap[p.id] || 0) > 0 ? '#10b981' : '#ef4444',
-                        backgroundColor: (stockMap[p.id] || 0) > 0 ? '#ecfdf5' : '#fef2f2',
-                        padding: '0.25rem 0.75rem',
-                        borderRadius: '1rem',
-                        fontSize: '0.875rem'
-                      }}>
-                        {stockMap[p.id] || 0}
-                      </span>
-                    </td>
-                    <td style={{ padding: '1rem', color: '#64748b' }}>{p.manufacturer || '--'}</td>
-                    <td style={{ padding: '1rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
-                        <button onClick={() => handleEdit(p)} style={{ color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}><Edit2 size={16} /></button>
-                        <button onClick={() => handleDelete(p.id)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={16} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
+                          <button onClick={() => navigate(`/admin/products/${p.id}`)} style={{ color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }} title="Xem chi tiết"><Eye size={16} /></button>
+                          <button onClick={() => handleEdit(p)} style={{ color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}><Edit2 size={16} /></button>
+                          <button onClick={() => handleDelete(p.id)} style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={16} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )
             ) : (activeTab === 'categories' ? categories : activeTab === 'units' ? units : groups).length === 0 ? (
               <tr>

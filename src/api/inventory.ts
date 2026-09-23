@@ -1,4 +1,4 @@
-import client from './client';
+﻿import client from './client';
 import type { Distributor } from './distributors';
 
 export interface Category {
@@ -54,9 +54,15 @@ export interface Product {
   units: ProductUnit[];
   usage?: string;
   basePrice?: number;
+  importPrice?: number;
   sellingPrice?: number;
   salePrice?: number;
   price?: number;
+  quantity?: number;
+  totalAmount?: number;
+  canTraNcc?: number;
+  tienTraNcc?: number;
+  note?: string;
   branchPrices?: { id: string; branchId: string; price: number }[];
 }
 
@@ -249,6 +255,26 @@ export const createProduct = async (data: Partial<Product>) => {
   return response.data;
 };
 
+export const importProductsExcel = async (file: File, branchId?: string) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (branchId) {
+    formData.append('branchId', branchId);
+  }
+
+  const url = branchId ? `/products/import?branchId=${encodeURIComponent(branchId)}` : '/products/import';
+
+  const response = await client.post<{
+    success: number;
+    failed: { rowNum: number; name?: string; productCode?: string; barcode?: string; reason: string }[];
+  }>(url, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};
+
 export const updateProduct = async (id: string, data: Partial<Product>) => {
   const response = await client.patch<Product>(`/products/${id}`, data);
   return response.data;
@@ -256,6 +282,11 @@ export const updateProduct = async (id: string, data: Partial<Product>) => {
 
 export const deleteProduct = async (id: string) => {
   await client.delete(`/products/${id}`);
+};
+
+export const getProductById = async (id: string): Promise<Product> => {
+  const response = await client.get<any>(`/products/${id}`);
+  return response.data?.data || response.data;
 };
 
 export const getProductPrices = async (productId: string) => {
@@ -325,6 +356,18 @@ export const processInventoryUpload = async (file: File, branchId?: string) => {
   return response.data;
 };
 
+
+export const importKiotViet = async (file: File, branchId?: string) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const url = branchId ? `/inventory/import-kiotviet?branchId=${branchId}` : '/inventory/import-kiotviet';
+  const response = await client.post<any>(url, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return response.data;
+};
 export const getSalesRank = async (branchId?: string): Promise<Record<string, number>> => {
   let url = '/inventory/sales-rank';
   if (branchId) url += `?branchId=${branchId}`;
@@ -403,9 +446,9 @@ export const getTransfers = async (branchId?: string, status?: string) => {
   if (status) params.append('status', status);
   const queryString = params.toString();
   if (queryString) url += `?${queryString}`;
-  
-  const response = await client.get<InventoryTransfer[]>(url);
-  return response.data;
+
+  const response = await client.get<any>(url);
+  return response.data?.data || response.data || [];
 };
 
 export const confirmTransfer = async (id: string) => {
@@ -471,6 +514,7 @@ export default {
   getProducts,
   getProductsPaginated,
   createProduct,
+  importProductsExcel,
   updateProduct,
   deleteProduct,
   getCategories,
