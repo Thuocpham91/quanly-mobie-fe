@@ -1,7 +1,8 @@
-import client from './client';
+import client, { type PaginatedResponse } from './client';
 
 export interface Distributor {
   id: string;
+  code?: string;
   name: string;
   phone?: string;
   address?: string;
@@ -9,9 +10,14 @@ export interface Distributor {
   description?: string;
 }
 
-export const getDistributors = async () => {
-  const response = await client.get<any>('/distributors');
-  return response.data?.data || response.data || [];
+export const getDistributors = async (params: {
+  page: number;
+  limit: number;
+  search?: string;
+  address?: string;
+}): Promise<PaginatedResponse<Distributor>> => {
+  const response = await client.get<PaginatedResponse<Distributor>>('/distributors', { params });
+  return response.data;
 };
 
 export const createDistributor = async (data: Partial<Distributor>) => {

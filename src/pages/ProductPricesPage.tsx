@@ -267,7 +267,7 @@ const ProductPricesPage: React.FC = () => {
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.6rem 1.25rem', height: '40px' }}
                     >
                       <Save size={18} />
-                      {updateProductMutation.isPending ? 'Đang lưu...' : 'Lưu giá gốc'}
+                      {updateProductMutation.isPending ? 'Đang lưu...' : 'Lưu giá cơ bản'}
                     </button>
                   </div>
                   

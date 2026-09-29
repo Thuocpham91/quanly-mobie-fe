@@ -21,6 +21,11 @@ export interface CreateOrderPayload {
   createdAt?: string;
 }
 
+export type UpdateOrderPayload = Omit<Partial<CreateOrderPayload>, 'customerId' | 'items'> & {
+  customerId?: string | null;
+  items?: { productId: string; quantity: number; unitPrice: number }[];
+};
+
 export interface Order {
   id: string;
   orderCode: string;
@@ -72,14 +77,31 @@ export const getOrders = async (
   search?: string,
   status?: string,
 ): Promise<PaginatedResponse<Order>> => {
+  const hasSearch = !!search && search.trim().length > 0;
   const params: any = { page, limit };
   if (petId) params.petId = petId;
   if (customerId) params.customerId = customerId;
-  if (search) params.search = search;
   if (status) params.status = status;
-  const response = await api.get('/orders', { params });
+
+  const endpoint = hasSearch ? '/orders/search' : '/orders';
+  if (hasSearch) {
+    params.q = search.trim();
+  }
+
+  const response = await api.get(endpoint, { params });
   const raw = response.data;
   if (raw && typeof raw.total === 'number' && !raw.meta) {
+    return {
+      data: raw.data || [],
+      meta: {
+        total: raw.total,
+        page,
+        limit,
+        totalPages: Math.ceil(raw.total / limit),
+      },
+    };
+  }
+  if (raw && raw.data && !raw.meta && typeof raw.total === 'number') {
     return {
       data: raw.data || [],
       meta: {
@@ -129,5 +151,10 @@ export const updateOrderStatus = async (id: string, status: string): Promise<Ord
 
 export const updateOrderDate = async (id: string, createdAt: string): Promise<Order> => {
   const response = await api.put(`/orders/${id}/date`, { createdAt });
+  return response.data;
+};
+
+export const updateOrder = async (id: string, payload: UpdateOrderPayload): Promise<Order> => {
+  const response = await api.patch(`/orders/${id}`, payload);
   return response.data;
 };

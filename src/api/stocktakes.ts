@@ -57,8 +57,10 @@ export interface UpdateStocktakeDto {
 
 export const getStocktakes = async (branchId?: string) => {
   const url = branchId ? `/inventory/stocktakes?branchId=${branchId}` : '/inventory/stocktakes';
-  const response = await client.get<Stocktake[]>(url);
-  return response.data;
+  const response = await client.get<Stocktake[] | { data?: Stocktake[] }>(url);
+  if (Array.isArray(response.data)) return response.data;
+  if (response.data && Array.isArray(response.data.data)) return response.data.data;
+  return [];
 };
 
 export const getStocktake = async (id: string) => {

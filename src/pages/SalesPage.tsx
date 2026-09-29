@@ -19,7 +19,7 @@ import {
   Package,
   Calendar
 } from 'lucide-react';
-import { getInventorySummary, getCategories, type Product } from '../api/inventory';
+import { getInventorySummary, getCategories, getProducts, type Product } from '../api/inventory';
 import { searchCustomers, createCustomer, type Customer } from '../api/customers';
 import { createOrder, type CreateOrderPayload } from '../api/orders';
 import { getDashboardStatistics, type DashboardStatisticsResponse } from '../api/dashboard';
@@ -66,6 +66,13 @@ const SalesPage: React.FC = () => {
   const { data: inventorySummaries = [], isLoading: isLoadingInventory } = useQuery({
     queryKey: ['salesInventorySummary', selectedBranchId],
     queryFn: () => getInventorySummary(selectedBranchId),
+    enabled: !!selectedBranchId,
+  });
+
+  const { data: productsWithBranchPrices = [], isLoading: isLoadingBranchPrices } = useQuery({
+    queryKey: ['salesProductsBranchPrices', selectedBranchId],
+    queryFn: () => getProducts({ isService: false, limit: 10000 }),
+    enabled: !!selectedBranchId,
   });
 
   // Get product categories
@@ -152,7 +159,7 @@ const SalesPage: React.FC = () => {
     if (!product) return 0;
     if (product.branchPrices && selectedBranchId) {
       const bp = product.branchPrices.find(p => p.branchId === selectedBranchId);
-      if (bp && bp.price !== undefined && bp.price !== null && Number(bp.price) > 0) {
+      if (bp && bp.price !== undefined && bp.price !== null && Number.isFinite(Number(bp.price)) && Number(bp.price) >= 0) {
         return Number(bp.price);
       }
     }
@@ -170,6 +177,12 @@ const SalesPage: React.FC = () => {
     }
     return 0;
   };
+
+  const branchPriceByProductId = new Map<string, NonNullable<Product['branchPrices']>[number]>();
+  productsWithBranchPrices.forEach((product: Product) => {
+    const branchPrice = product.branchPrices?.find(price => price.branchId === selectedBranchId);
+    if (branchPrice) branchPriceByProductId.set(product.id, branchPrice);
+  });
 
   const handleAddToCart = (product: Product, currentStock: number) => {
     if (currentStock <= 0) {
@@ -384,7 +397,7 @@ const SalesPage: React.FC = () => {
 
         {/* Products Grid */}
         <div style={{ flex: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
-          {isLoadingInventory ? (
+          {isLoadingInventory || isLoadingBranchPrices ? (
             <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
               <Loader2 size={36} className="animate-spin" style={{ margin: '0 auto 1rem', color: '#6366f1' }} />
               Đang tải danh sách hàng hóa...
@@ -400,7 +413,14 @@ const SalesPage: React.FC = () => {
               gap: '0.75rem'
             }}>
               {displayedProducts.map((item: any) => {
-                const p = item.product;
+                const inventoryProduct = item.product as Product;
+                const branchPrice = branchPriceByProductId.get(inventoryProduct.id);
+                const p: Product = {
+                  ...inventoryProduct,
+                  branchPrices: branchPrice
+                    ? [branchPrice]
+                    : inventoryProduct.branchPrices,
+                };
                 const price = getProductPrice(p);
                 const stock = item.totalStock;
                 const isOutOfStock = stock <= 0;

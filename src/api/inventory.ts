@@ -40,6 +40,7 @@ export interface Product {
   productCode?: string;
   isService?: boolean;
   hasImei?: boolean;
+  imeis?: string[];
   imageUrl?: string;
   imageUrls?: string[];
   manufacturer?: string;
@@ -64,6 +65,7 @@ export interface Product {
   tienTraNcc?: number;
   note?: string;
   branchPrices?: { id: string; branchId: string; price: number }[];
+  batches?: InventoryBatch[];
 }
 
 export interface InventoryBatch {
@@ -76,18 +78,24 @@ export interface InventoryBatch {
   importedQuantity: number;
   currentQuantity: number;
   costPrice: number;
+  unitPrice?: number;
+  discountPercent?: number;
+  discountAmount?: number;
+  lineTotal?: number;
   importDate?: string;
   expiryDate?: string;
   invoiceName?: string;
   isGift?: boolean;
   taxAmount?: number;
-  discountAmount?: number;
   shippingFee?: number;
   personnelName?: string;
+  itemNote?: string;
   unitId?: string;
   packagingUnitId?: string;
   conversionFactor?: number;
   imeis?: string[];
+  importOrderId?: string;
+  importOrder?: ImportOrder;
 }
 
 export interface InventorySummary {
@@ -101,6 +109,7 @@ export interface ImportOrderItem {
   productId: string;
   importedQuantity: number;
   costPrice?: number;
+  lineTotal?: number;
   expiryDate?: string;
   isGift?: boolean;
   imeis?: string[];
@@ -111,14 +120,21 @@ export interface ImportOrder {
   code: string;
   branchId: string;
   distributorId?: string;
-  distributor?: { id: string; name: string };
+  distributor?: { id: string; name: string; code?: string; phone?: string };
   invoiceName?: string;
+  invoiceNumber?: string;
   personnelName?: string;
   importDate?: string;
   note?: string;
+  totalProductAmount?: number;
   taxAmount: number;
+  discountPercent?: number;
   discountAmount: number;
   shippingFee: number;
+  debtAmount?: number;
+  paidAmount?: number;
+  totalQuantity?: number;
+  totalItemCount?: number;
   totalAmount: number;
   status: 'DRAFT' | 'COMPLETED' | 'CANCELLED';
   createdById?: string;
@@ -310,14 +326,22 @@ export const getInventorySummary = async (branchId?: string) => {
   return response.data?.data || response.data || [];
 };
 
-export const getInventoryBatches = async (branchId?: string, page = 1, limit = 10) => {
+export const getInventoryBatches = async (branchId?: string, page = 1, limit = 10, productId?: string) => {
   const query = new URLSearchParams();
   if (branchId) query.append('branchId', branchId);
+  if (productId) query.append('productId', productId);
   query.append('page', String(page));
   query.append('limit', String(limit));
   const url = `/inventory/batches?${query.toString()}`;
   const response = await client.get<any>(url);
   return response.data || { data: [], meta: { total: 0, page, limit, totalPages: 1 } };
+};
+
+export const getProductBatches = async (productId: string, branchId?: string) => {
+  const query = new URLSearchParams();
+  if (branchId) query.append('branchId', branchId);
+  const response = await client.get<any>(`/products/${productId}/batches?${query.toString()}`);
+  return response.data || [];
 };
 
 export const getInventoryBatch = async (id: string) => {
@@ -535,6 +559,7 @@ export default {
   deleteUnit,
   getInventorySummary,
   getInventoryBatches,
+  getProductBatches,
   createInventoryBatch,
   updateInventoryBatch,
   deleteInventoryBatch,

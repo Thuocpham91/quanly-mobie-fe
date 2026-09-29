@@ -36,7 +36,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
     const fetchProvinces = async () => {
       try {
         const data = await locationsApi.getProvinces();
-        setProvinces(data);
+        setProvinces(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error('Failed to fetch provinces', err);
       }
@@ -55,7 +55,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
       const fetchDistricts = async () => {
         try {
           const data = await locationsApi.getDistricts(selectedProvince as number);
-          setDistricts(data);
+          setDistricts(Array.isArray(data) ? data : []);
           setWards([]);
           
           // Only clear if the province changed and it's not the initial value
@@ -79,7 +79,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
       const fetchWards = async () => {
         try {
           const data = await locationsApi.getWards(selectedDistrict as number);
-          setWards(data);
+          setWards(Array.isArray(data) ? data : []);
           
           // Only clear if the district changed and it's not the initial value
           if (selectedDistrict !== initialDistrictId) {

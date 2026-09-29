@@ -145,35 +145,45 @@ const InventoryOrderDetailPage: React.FC = () => {
             marginLeft: '0.5rem', padding: '0.1rem 0.6rem', borderRadius: '9999px',
             backgroundColor: '#eff6ff', color: '#3b82f6', fontSize: '0.75rem', fontWeight: '700'
           }}>
-            {batches.length} mặt hàng
+            {Number(order.totalItemCount) || batches.length} mặt hàng
           </span>
         </div>
         <div style={{ overflow: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '750px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1900px', whiteSpace: 'nowrap' }}>
             <thead style={{ backgroundColor: '#f1f5f9' }}>
               <tr>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>STT</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>Tên mặt hàng</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>Thương hiệu</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>Serial/IMEI</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>Đơn vị</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569', textAlign: 'right' }}>SL nhập</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569', textAlign: 'right' }}>Tồn kho</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569', textAlign: 'right' }}>Đơn giá nhập</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569', textAlign: 'right' }}>Thành tiền</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569', textAlign: 'right' }}>Đơn giá</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569', textAlign: 'right' }}>Giảm giá %</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569', textAlign: 'right' }}>Giảm giá</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569', textAlign: 'right', whiteSpace: 'nowrap', minWidth: 'max-content' }}>Đơn giá nhập</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569', textAlign: 'right', whiteSpace: 'nowrap', minWidth: 'max-content' }}>Thành tiền</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569', textAlign: 'center' }}>Trạng thái</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>Ghi chú</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>HSD</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569', textAlign: 'center' }}>Hàng tặng</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>Ngày nhập</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>Mã NCC</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>Nhà cung cấp</th>
               </tr>
             </thead>
             <tbody>
               {batches.length === 0 && (
                 <tr>
-                  <td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
+                  <td colSpan={19} style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
                     Không có mặt hàng nào trong phiếu nhập này
                   </td>
                 </tr>
               )}
               {batches.map((batch, idx) => {
-                const lineTotal = batch.isGift ? 0 : Number(batch.costPrice || 0) * batch.importedQuantity;
                 const isLowStock = batch.currentQuantity < batch.importedQuantity * 0.2;
+                const lineTotal = batch.lineTotal ?? (batch.isGift ? 0 : Number(batch.costPrice || 0) * Number(batch.importedQuantity || 0));
                 return (
                   <tr
                     key={batch.id}
@@ -183,11 +193,16 @@ const InventoryOrderDetailPage: React.FC = () => {
                     }}
                   >
                     <td style={{ padding: '0.875rem 1rem', color: '#64748b', fontSize: '0.875rem' }}>{idx + 1}</td>
-                    <td style={{ padding: '0.875rem 1rem' }}>
-                      <div style={{ fontWeight: '600', color: '#1e293b' }}>{batch.product?.name || 'Sản phẩm đã xóa'}</div>
-                      {batch.product?.barcode && (
-                        <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{batch.product.barcode}</div>
-                      )}
+                    <td title={[batch.product?.name || 'Sản phẩm đã xóa', batch.product?.barcode].filter(Boolean).join(' | ')} style={{ padding: '0.875rem 0.5rem', width: '10ch', maxWidth: '10ch', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                      <div style={{ width: '10ch', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: '600', color: '#1e293b' }}>
+                        {batch.product?.name || 'Sản phẩm đã xóa'}
+                      </div>
+                    </td>
+                    <td style={{ padding: '0.875rem 1rem', color: '#64748b', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
+                      {batch.product?.manufacturer || '--'}
+                    </td>
+                    <td title={batch.imeis?.join(', ') || '--'} style={{ padding: '0.875rem 1rem', color: '#475569', fontSize: '0.8rem', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {batch.imeis?.length ? batch.imeis.join(', ') : '--'}
                     </td>
                     <td style={{ padding: '0.875rem 1rem', color: '#64748b', fontSize: '0.875rem' }}>
                       {batch.product?.unit?.name || '--'}
@@ -203,12 +218,25 @@ const InventoryOrderDetailPage: React.FC = () => {
                         {batch.currentQuantity.toLocaleString()}
                       </span>
                     </td>
-                    <td style={{ padding: '0.875rem 1rem', textAlign: 'right', color: '#64748b' }}>
+                    <td style={{ padding: '0.875rem 1rem', textAlign: 'right', color: '#64748b', whiteSpace: 'nowrap' }}>
+                      {formatCurrency(Number(batch.unitPrice ?? batch.costPrice))}
+                    </td>
+                    <td style={{ padding: '0.875rem 1rem', textAlign: 'right', color: '#64748b', whiteSpace: 'nowrap' }}>
+                      {Number(batch.discountPercent || 0)}%
+                    </td>
+                    <td style={{ padding: '0.875rem 1rem', textAlign: 'right', color: '#64748b', whiteSpace: 'nowrap' }}>
+                      {formatCurrency(Number(batch.discountAmount || 0))}
+                    </td>
+                    <td style={{ padding: '0.875rem 1rem', textAlign: 'right', color: '#64748b', whiteSpace: 'nowrap', minWidth: 'max-content' }}>
                       {batch.isGift ? <span style={{ color: '#f59e0b', fontWeight: '600' }}>Miễn phí</span> : formatCurrency(Number(batch.costPrice))}
                     </td>
-                    <td style={{ padding: '0.875rem 1rem', textAlign: 'right', fontWeight: '700', color: '#1e293b' }}>
+                    <td style={{ padding: '0.875rem 1rem', textAlign: 'right', color: '#1e293b', fontWeight: '700', whiteSpace: 'nowrap', minWidth: 'max-content' }}>
                       {formatCurrency(lineTotal)}
                     </td>
+                    <td style={{ padding: '0.875rem 1rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <span style={{ padding: '0.2rem 0.6rem', borderRadius: '9999px', backgroundColor: sc.bg, color: sc.text, fontSize: '0.7rem', fontWeight: '700' }}>{sc.label}</span>
+                    </td>
+                    <td style={{ padding: '0.875rem 1rem', color: '#64748b', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{batch.itemNote || order.note || '--'}</td>
                     <td style={{ padding: '0.875rem 1rem', color: batch.expiryDate ? '#ef4444' : '#94a3b8', fontSize: '0.875rem' }}>
                       {batch.expiryDate ? new Date(batch.expiryDate).toLocaleDateString('vi-VN') : '--'}
                     </td>
@@ -219,6 +247,9 @@ const InventoryOrderDetailPage: React.FC = () => {
                         <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>—</span>
                       )}
                     </td>
+                    <td style={{ padding: '0.875rem 1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{formatDate(batch.importDate || order.importDate || order.createdAt)}</td>
+                    <td style={{ padding: '0.875rem 1rem', color: '#2563eb', whiteSpace: 'nowrap' }}>{order.distributor?.code || '--'}</td>
+                    <td style={{ padding: '0.875rem 1rem', color: '#475569', whiteSpace: 'nowrap' }}>{order.distributor?.name || '--'}</td>
                   </tr>
                 );
               })}

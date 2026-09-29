@@ -331,11 +331,11 @@ const CustomersPage: React.FC = () => {
               ) : customers.map((customer: any) => (
                 <tr key={customer.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background-color 0.2s' }}>
                   {/* Mã KH */}
-                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: '600', color: '#475569' }}>
+                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: '600', color: '#475569', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.5' }}>
                     {customer.code || 'N/A'}
                   </td>
                   {/* Tên */}
-                  <td style={{ padding: '1rem 1.5rem' }}>
+                  <td style={{ padding: '1rem 1.5rem', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.5' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <div 
                         onClick={() => handleViewDetails(customer)}
@@ -362,40 +362,40 @@ const CustomersPage: React.FC = () => {
                     </div>
                   </td>
                   {/* Liên hệ */}
-                  <td style={{ padding: '1rem 1.5rem' }}>
+                  <td style={{ padding: '1rem 1.5rem', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.5' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', whiteSpace: 'normal', wordBreak: 'break-word' }}>
                         <Phone size={14} color="#64748b" />
-                        {customer.phone || 'N/A'}
+                        <span style={{ display: 'inline-block', minWidth: 0 }}>{customer.phone || 'N/A'}</span>
                       </div>
                       {customer.address && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', color: '#64748b' }}>
-                          <MapPin size={14} />
-                          {customer.address}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.875rem', color: '#64748b', whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                          <MapPin size={14} style={{ flexShrink: 0, marginTop: '0.2rem' }} />
+                          <span style={{ display: 'inline-block', minWidth: 0 }}>{customer.address}</span>
                         </div>
                       )}
                     </div>
                   </td>
                   {/* Ngày mua gần nhất */}
-                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: '#475569' }}>
+                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: '#475569', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.5' }}>
                     {customer.lastPurchaseDate 
                       ? new Date(customer.lastPurchaseDate).toLocaleDateString('vi-VN') 
                       : (customer.createdAt ? new Date(customer.createdAt).toLocaleDateString('vi-VN') : 'Chưa có đơn')}
                   </td>
                   {/* Người tạo */}
-                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: '#64748b' }}>
+                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', color: '#64748b', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.5' }}>
                     {customer.creator || 'N/A'}
                   </td>
                   {/* Tổng bán */}
-                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: '600', color: '#1e293b', textAlign: 'right' }}>
+                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: '600', color: '#1e293b', textAlign: 'right', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.5' }}>
                     {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(customer.totalSales || 0))}
                   </td>
                   {/* Nợ cần thu */}
-                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: '600', color: Number(customer.currentDebt || 0) > 0 ? '#ef4444' : '#1e293b', textAlign: 'right' }}>
+                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: '600', color: Number(customer.currentDebt || 0) > 0 ? '#ef4444' : '#1e293b', textAlign: 'right', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.5' }}>
                     {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(customer.currentDebt || 0))}
                   </td>
                   {/* Tổng bán trừ trả */}
-                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: '600', color: '#059669', textAlign: 'right' }}>
+                  <td style={{ padding: '1rem 1.5rem', fontSize: '0.875rem', fontWeight: '600', color: '#059669', textAlign: 'right', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: '1.5' }}>
                     {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(customer.totalSalesMinusReturns || 0))}
                   </td>
                   {/* Actions */}

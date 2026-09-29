@@ -39,17 +39,28 @@ const InventoryPage: React.FC = () => {
     setStatusFilter('ALL');
     setSupplierFilter('');
     setPersonnelFilter('');
+    setPage(1);
   };
 
-  // Fetch Data
-  const { data: paginatedOrders, isLoading } = useQuery({
-    queryKey: ['importOrders', selectedBranchId, page, limit],
-    queryFn: () => getImportOrders(selectedBranchId!, page, limit),
+  // Fetch every API page so search and filters apply to the complete branch list.
+  const { data: orders = [], isLoading } = useQuery<ImportOrder[]>({
+    queryKey: ['importOrders', selectedBranchId],
+    queryFn: async () => {
+      const firstPage = await getImportOrders(selectedBranchId!, 1, 100);
+      const allOrders: ImportOrder[] = Array.isArray(firstPage?.data) ? firstPage.data : [];
+      const totalPages = Math.max(1, Number(firstPage?.meta?.totalPages || 1));
+
+      for (let currentPage = 2; currentPage <= totalPages; currentPage += 1) {
+        const nextPage = await getImportOrders(selectedBranchId!, currentPage, 100);
+        const pageOrders: ImportOrder[] = Array.isArray(nextPage?.data) ? nextPage.data : [];
+        if (pageOrders.length === 0) break;
+        allOrders.push(...pageOrders);
+      }
+
+      return allOrders;
+    },
     enabled: !!selectedBranchId,
   });
-
-  const orders: ImportOrder[] = paginatedOrders?.data || [];
-  const meta = paginatedOrders?.meta || { total: 0, page, limit, totalPages: 1 };
 
   const deleteMutation = useMutation({
     mutationFn: deleteImportOrder,
@@ -98,8 +109,12 @@ const InventoryPage: React.FC = () => {
       'Nhà cung cấp': order.distributor?.name || '--',
       'Số hóa đơn': order.invoiceName || '--',
       'Người nhập': order.personnelName || '--',
-      'Số mặt hàng': order.batches?.length || 0,
-      'Tổng tiền': Number(order.totalAmount).toLocaleString(),
+      'Tổng số mặt hàng': order.totalItemCount ?? order.batches?.length ?? 0,
+      'Thành tiền': Number(order.totalAmount || 0).toLocaleString(),
+      'Tổng tiền hàng': Number(order.totalProductAmount || 0).toLocaleString(),
+      'Giảm giá phiếu': Number(order.discountAmount || 0).toLocaleString(),
+      'Cần trả NCC': Number(order.debtAmount || 0).toLocaleString(),
+      'Tiền đã trả NCC': Number(order.paidAmount || 0).toLocaleString(),
     }));
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
@@ -123,6 +138,10 @@ const InventoryPage: React.FC = () => {
     return matchesSearch && matchesStatus && matchesSupplier && matchesPersonnel;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / limit));
+  const currentPage = Math.min(page, totalPages);
+  const pageOrders = filteredOrders.slice((currentPage - 1) * limit, currentPage * limit);
+
   const statusColor = (status: string) => {
     if (status === 'COMPLETED') return { bg: '#dcfce7', text: '#16a34a' };
     if (status === 'CANCELLED') return { bg: '#fee2e2', text: '#dc2626' };
@@ -139,14 +158,31 @@ const InventoryPage: React.FC = () => {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '0.25rem 0.5rem', backgroundColor: '#f8fafc', gap: '0.75rem' }}>
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
-        <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap', marginBottom: '0.25rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
+        <div style={{ flex: '0 0 195px' }}>
           <h1 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1e293b', margin: 0 }}>Quản lý nhập kho</h1>
           <p style={{ color: '#64748b', fontSize: '0.8rem', margin: 0, marginTop: '0.1rem' }}>Danh sách phiếu nhập hàng hóa</p>
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(112px, 1fr))', gap: '0.4rem', flex: '1 1 390px', maxWidth: '440px', minWidth: 0 }}>
+          {[
+            { label: 'Tổng phiếu', value: orders.length, icon: Receipt, color: '#3b82f6', bg: '#eff6ff' },
+            { label: 'Tổng mặt hàng', value: orders.reduce((sum, order) => sum + (Number(order.totalItemCount) || order.batches?.length || 0), 0), icon: Package, color: '#10b981', bg: '#f0fdf4' },
+            { label: 'Tổng tiền nhập', value: `${orders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0).toLocaleString()} ₫`, icon: FileDown, color: '#f59e0b', bg: '#fffbeb' },
+          ].map((stat) => (
+            <div key={stat.label} style={{ minWidth: 0, backgroundColor: 'white', borderRadius: '0.45rem', padding: '0.4rem 0.5rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <div style={{ width: '1.8rem', height: '1.8rem', borderRadius: '0.35rem', backgroundColor: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <stat.icon size={14} color={stat.color} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '0.62rem', color: '#64748b', marginBottom: '0.05rem', whiteSpace: 'nowrap' }}>{stat.label}</div>
+                <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stat.value}</div>
+              </div>
+            </div>
+          ))}
+        </div>
 
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <div style={{ position: 'relative', width: '260px' }}>
+        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', justifyContent: 'flex-end', flex: '0 1 auto', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', width: '190px', flex: '0 1 190px' }}>
             <Search size={16} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
             <input
               type="text"
@@ -155,7 +191,7 @@ const InventoryPage: React.FC = () => {
               onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
               style={{
                 width: '100%',
-                padding: '0.45rem 0.85rem 0.45rem 2.2rem',
+                padding: '0.4rem 0.65rem 0.4rem 2rem',
                 borderRadius: '0.375rem',
                 border: '1px solid #cbd5e1',
                 outline: 'none',
@@ -169,7 +205,7 @@ const InventoryPage: React.FC = () => {
             type="button"
             className="btn-secondary"
             onClick={() => setIsSearchDrawerOpen(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.55rem', fontSize: '0.78rem', borderRadius: '0.375rem', whiteSpace: 'nowrap' }}
           >
             <SlidersHorizontal size={16} style={{ color: '#6366f1' }} />
             Menu tìm kiếm
@@ -198,7 +234,7 @@ const InventoryPage: React.FC = () => {
           <button
             className="btn-secondary"
             onClick={handleExportExcel}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.55rem', fontSize: '0.78rem', borderRadius: '0.375rem', whiteSpace: 'nowrap' }}
           >
             <FileDown size={16} />
             Xuất Excel
@@ -207,7 +243,7 @@ const InventoryPage: React.FC = () => {
             className="btn-secondary"
             onClick={() => legacyFileRef.current?.click()}
             disabled={isImportingLegacy}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.55rem', fontSize: '0.78rem', borderRadius: '0.375rem', whiteSpace: 'nowrap' }}
           >
             <FileSpreadsheet size={16} />
             {isImportingLegacy ? 'Đang import...' : 'Import cũ'}
@@ -224,7 +260,7 @@ const InventoryPage: React.FC = () => {
                 XLSX.utils.book_append_sheet(wb, ws, 'Errors');
                 XLSX.writeFile(wb, `import_errors_${new Date().toISOString().slice(0, 10)}.xlsx`);
               }}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.55rem', fontSize: '0.78rem', borderRadius: '0.375rem', whiteSpace: 'nowrap' }}
             >
               <FileDown size={16} />
               Tải lỗi ({importErrors.length})
@@ -233,7 +269,7 @@ const InventoryPage: React.FC = () => {
           <button
             className="btn-primary"
             onClick={() => navigate('/admin/inventory/import')}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.95rem', fontSize: '0.85rem', borderRadius: '0.375rem', backgroundColor: '#3b82f6', border: 'none' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', padding: '0.4rem 0.65rem', fontSize: '0.78rem', borderRadius: '0.375rem', backgroundColor: '#3b82f6', border: 'none', whiteSpace: 'nowrap' }}
           >
             <Plus size={16} />
             Nhập hàng
@@ -241,31 +277,12 @@ const InventoryPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
-        {[
-          { label: 'Tổng phiếu', value: meta.total, icon: Receipt, color: '#3b82f6', bg: '#eff6ff' },
-          { label: 'Tổng mặt hàng', value: orders.reduce((s, o) => s + (o.batches?.length || 0), 0), icon: Package, color: '#10b981', bg: '#f0fdf4' },
-          { label: 'Tổng tiền nhập', value: orders.reduce((s, o) => s + Number(o.totalAmount || 0), 0).toLocaleString() + ' ₫', icon: FileDown, color: '#f59e0b', bg: '#fffbeb' },
-        ].map((stat, i) => (
-          <div key={i} style={{ backgroundColor: 'white', borderRadius: '0.75rem', padding: '1rem 1.25rem', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ width: '2.5rem', height: '2.5rem', borderRadius: '0.5rem', backgroundColor: stat.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <stat.icon size={20} color={stat.color} />
-            </div>
-            <div>
-              <div style={{ fontSize: '0.75rem', color: '#64748b', marginBottom: '0.15rem' }}>{stat.label}</div>
-              <div style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1e293b' }}>{stat.value}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
       {/* Main Content */}
       <div className="card" style={{ flex: 1, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
         {/* Table */}
         <div style={{ flex: 1, overflow: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '800px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '1450px', whiteSpace: 'nowrap' }}>
             <thead style={{ backgroundColor: '#10b981', color: 'white', position: 'sticky', top: 0, zIndex: 10 }}>
               <tr>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>STT</th>
@@ -273,32 +290,32 @@ const InventoryPage: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Receipt size={14} /> Mã phiếu</div>
                 </th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Calendar size={14} /> Ngày nhập</div>
-                </th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Building2 size={14} /> Nhà cung cấp</div>
                 </th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>Số HĐ</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><User size={14} /> Người nhập</div>
-                </th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}><Package size={14} /> Mặt hàng</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}><Package size={14} /> Tổng số mặt hàng</div>
                 </th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>Tổng tiền</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'center' }}>Trạng thái</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>Tổng tiền hàng</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>Giảm giá phiếu</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>Cần trả NCC</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>Tiền đã trả NCC</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: 'max-content' }}>Trạng thái</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Calendar size={14} /> Ngày nhập</div>
+                </th>
+                <th style={{ padding: '0.75rem 0.5rem', fontWeight: '600', fontSize: '0.875rem', width: '10ch', maxWidth: '10ch', whiteSpace: 'nowrap' }}>Người nhập</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={10} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Đang tải...</td>
+                  <td colSpan={12} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>Đang tải...</td>
                 </tr>
               )}
               {!isLoading && filteredOrders.length === 0 && (
                 <tr>
-                  <td colSpan={10} style={{ padding: '4rem', textAlign: 'center' }}>
+                  <td colSpan={12} style={{ padding: '4rem', textAlign: 'center' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', color: '#94a3b8' }}>
                       <div style={{ width: '4rem', height: '4rem', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Package size={32} color="#cbd5e1" />
@@ -315,9 +332,9 @@ const InventoryPage: React.FC = () => {
                 </tr>
               )}
 
-              {filteredOrders.map((order: ImportOrder, idx: number) => {
+              {pageOrders.map((order: ImportOrder, idx: number) => {
                 const sc = statusColor(order.status);
-                const totalItems = order.batches?.length || 0;
+                const totalItems = Number(order.totalItemCount) || order.batches?.length || 0;
                 return (
                   <tr
                     key={order.id}
@@ -331,23 +348,14 @@ const InventoryPage: React.FC = () => {
                     onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#eff6ff')}
                     onMouseLeave={e => (e.currentTarget.style.backgroundColor = idx % 2 === 0 ? 'white' : '#f8fafc')}
                   >
-                    <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.875rem' }}>{(page - 1) * limit + idx + 1}</td>
+                    <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.875rem' }}>{(currentPage - 1) * limit + idx + 1}</td>
                     <td style={{ padding: '1rem' }}>
                       <div style={{ fontWeight: '700', color: '#3b82f6', fontSize: '0.9rem' }}>{order.code}</div>
-                    </td>
-                    <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.875rem' }}>
-                      {formatDate(order.importDate || order.createdAt)}
                     </td>
                     <td style={{ padding: '1rem', color: '#1e293b', fontWeight: '500', fontSize: '0.875rem' }}>
                       {order.distributor?.name || <span style={{ color: '#94a3b8' }}>--</span>}
                     </td>
-                    <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.875rem' }}>
-                      {order.invoiceName || <span style={{ color: '#94a3b8' }}>--</span>}
-                    </td>
-                    <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.875rem' }}>
-                      {order.personnelName || '--'}
-                    </td>
-                    <td style={{ padding: '1rem', textAlign: 'center' }}>
+                    <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: 'max-content' }}>
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         width: '2rem', height: '2rem', borderRadius: '50%',
@@ -356,8 +364,17 @@ const InventoryPage: React.FC = () => {
                         {totalItems}
                       </span>
                     </td>
-                    <td style={{ padding: '1rem', textAlign: 'right', fontWeight: '700', color: '#1e293b' }}>
-                      {Number(order.totalAmount).toLocaleString()} ₫
+                    <td style={{ padding: '1rem', textAlign: 'right', color: '#475569', whiteSpace: 'nowrap' }}>
+                      {Number(order.totalProductAmount || 0).toLocaleString()} ₫
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'right', color: '#475569', whiteSpace: 'nowrap' }}>
+                      {Number(order.discountAmount || 0).toLocaleString()} ₫
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'right', color: '#dc2626', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {Number(order.debtAmount || 0).toLocaleString()} ₫
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'right', color: '#16a34a', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {Number(order.paidAmount || 0).toLocaleString()} ₫
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
                       <span style={{
@@ -367,6 +384,12 @@ const InventoryPage: React.FC = () => {
                       }}>
                         {statusLabel(order.status)}
                       </span>
+                    </td>
+                    <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
+                      {formatDate(order.importDate || order.createdAt)}
+                    </td>
+                    <td title={order.personnelName || '--'} style={{ padding: '1rem 0.5rem', color: '#64748b', fontSize: '0.875rem', width: '10ch', maxWidth: '10ch', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <div style={{ width: '10ch', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{order.personnelName || '--'}</div>
                     </td>
                     <td style={{ padding: '1rem' }} onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.5rem' }}>
@@ -396,10 +419,10 @@ const InventoryPage: React.FC = () => {
       </div>
 
       <Pagination
-        currentPage={page}
-        totalPages={meta.totalPages}
+        currentPage={currentPage}
+        totalPages={totalPages}
         onPageChange={setPage}
-        totalItems={meta.total}
+        totalItems={filteredOrders.length}
       />
 
       {/* Right Search Drawer */}
@@ -420,7 +443,7 @@ const InventoryPage: React.FC = () => {
             type="text"
             placeholder="Mã phiếu, số HĐ, NCC, người nhập..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
             style={{
               width: '100%',
               padding: '0.6rem 0.8rem',
@@ -438,7 +461,7 @@ const InventoryPage: React.FC = () => {
           </label>
           <select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
             style={{
               width: '100%',
               padding: '0.6rem 0.8rem',
@@ -464,7 +487,7 @@ const InventoryPage: React.FC = () => {
             type="text"
             placeholder="Tên nhà cung cấp..."
             value={supplierFilter}
-            onChange={(e) => setSupplierFilter(e.target.value)}
+            onChange={(e) => { setSupplierFilter(e.target.value); setPage(1); }}
             style={{
               width: '100%',
               padding: '0.6rem 0.8rem',
@@ -484,7 +507,7 @@ const InventoryPage: React.FC = () => {
             type="text"
             placeholder="Tên người nhập..."
             value={personnelFilter}
-            onChange={(e) => setPersonnelFilter(e.target.value)}
+            onChange={(e) => { setPersonnelFilter(e.target.value); setPage(1); }}
             style={{
               width: '100%',
               padding: '0.6rem 0.8rem',

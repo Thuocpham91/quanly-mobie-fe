@@ -114,7 +114,8 @@
     "fetching": "Fetching branches...",
     "no_branches": "No branches found",
     "btn_cancel": "Cancel",
-    "btn_save": "Save Changes"
+    "btn_save": "Save Changes",
+    "btn_create": "Create Branch"
   },
   "customers": {
     "title": "Owners Management",
@@ -247,6 +248,7 @@
     "add_new": "Add Distributor",
     "search_placeholder": "Search by name or phone...",
     "table_name": "Supplier Name",
+    "table_code": "Supplier Code",
     "table_contact": "Contact Info",
     "table_address": "Address",
     "table_actions": "Actions",

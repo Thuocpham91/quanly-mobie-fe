@@ -60,7 +60,7 @@ const DashboardLayout: React.FC = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isScaleMenuOpen, setIsScaleMenuOpen] = useState(false);
   const { scale } = useInterfaceScale();
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['Tổng quan', 'Bán hàng']));
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<{
     id: string;
     type: 'info' | 'success' | 'warning' | 'error';
@@ -238,24 +238,18 @@ const DashboardLayout: React.FC = () => {
     }))
     .filter(group => group.items.length > 0);
 
-  // Auto-expand group containing current path
+  const isPathActive = (path: string) =>
+    location.pathname === path || (path !== '/admin' && location.pathname.startsWith(`${path}/`));
+
+  // Keep only the group containing the current route expanded.
   React.useEffect(() => {
-    menuGroups.forEach(group => {
-      const hasActive = group.items.some(item => location.pathname === item.path);
-      if (hasActive) {
-        setExpandedGroups(prev => new Set([...prev, group.label]));
-      }
-    });
+    const activeGroup = menuGroups.find(group => group.items.some(item => isPathActive(item.path)));
+    setExpandedGroups(activeGroup ? new Set([activeGroup.label]) : new Set());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   const toggleGroup = (label: string) => {
-    setExpandedGroups(prev => {
-      const next = new Set(prev);
-      if (next.has(label)) next.delete(label);
-      else next.add(label);
-      return next;
-    });
+    setExpandedGroups(prev => prev.has(label) ? new Set() : new Set([label]));
   };
 
   const handleLogout = () => {
@@ -322,7 +316,7 @@ const DashboardLayout: React.FC = () => {
         <nav style={{ flex: 1, padding: '0 1rem', overflowY: 'auto' }}>
         {menuGroups.map((group) => {
           const isExpanded = expandedGroups.has(group.label);
-          const hasActive = group.items.some(item => location.pathname === item.path);
+          const hasActive = group.items.some(item => isPathActive(item.path));
           const isCollapsedSidebar = isCollapsed && !isMobile;
 
           return (
@@ -382,7 +376,7 @@ const DashboardLayout: React.FC = () => {
                 transition: 'max-height 0.28s ease',
               }}>
                 {group.items.map((item) => {
-                  const isActive = location.pathname === item.path;
+                  const isActive = isPathActive(item.path);
                   return (
                     <Link
                       key={item.path}

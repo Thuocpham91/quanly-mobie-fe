@@ -34,6 +34,7 @@ interface ImportItem {
   expiryDate: string;
   isGift: boolean;
   imeis?: string[];
+  serialInput?: string;
   conversionFactor?: number; // kept for legacy compat if needed
   quantityBoxes?: number; // kept for legacy compat if needed
   packagingUnitId?: string; // kept for legacy compat if needed
@@ -55,6 +56,9 @@ const getNumberValue = (value: unknown) => {
   const parsed = parseFloat(text);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+
+const productTracksImei = (product: Product) =>
+  Boolean(product.hasImei || (product as any).isImei || (product as any).manageImei);
 
 const InventoryImportPage: React.FC = () => {
   const { t } = useTranslation();
@@ -121,6 +125,8 @@ const InventoryImportPage: React.FC = () => {
         priceType: 'base',
         expiryDate: editingBatch.expiryDate ? new Date(editingBatch.expiryDate).toISOString().split('T')[0] : '',
         isGift: editingBatch.isGift || false,
+        imeis: editingBatch.imeis || [],
+        serialInput: (editingBatch.imeis || []).join(', '),
       };
 
       // Actually, if we just implemented "Total Price" entry, the DB costPrice should be the unit price.
@@ -189,7 +195,10 @@ const InventoryImportPage: React.FC = () => {
 
   // Fetch Data
   const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: getProducts });
-  const { data: distributors = [] } = useQuery({ queryKey: ['distributors'], queryFn: getDistributors });
+  const { data: distributors = [] } = useQuery({
+    queryKey: ['distributors'],
+    queryFn: async () => (await getDistributors({ page: 1, limit: 10000 })).data,
+  });
   const { data: units = [] } = useQuery({ queryKey: ['units'], queryFn: getUnits });
   const { data: usersData } = useQuery({ 
     queryKey: ['users', selectedBranchId], 
@@ -255,6 +264,7 @@ const InventoryImportPage: React.FC = () => {
       expiryDate: details?.expiryDate || '',
       isGift: false,
       imeis: details?.imeis || [],
+      serialInput: details?.serialInput ?? (details?.imeis || []).join(', '),
     };
     setItems([...items, newItem]);
     setProductSearch('');
@@ -286,7 +296,7 @@ const InventoryImportPage: React.FC = () => {
 
     // Check for missing IMEIs
     const missingImeiItems = items.filter((item) => {
-      if (!item.product.hasImei) return false;
+      if (!productTracksImei(item.product)) return false;
       let totalQty = item.unitQuantities[item.baseUnitId] || 0;
       item.product.units?.forEach((pu: any) => {
         totalQty += (item.unitQuantities[pu.unitId] || 0) * (pu.conversionFactor || 1);
@@ -323,7 +333,7 @@ const InventoryImportPage: React.FC = () => {
         costPrice: Math.round(unitPrice),
         expiryDate: item.expiryDate || undefined,
         isGift: item.isGift,
-        imeis: item.product.hasImei ? item.imeis || [] : undefined,
+        imeis: productTracksImei(item.product) ? item.imeis || [] : undefined,
       };
     });
 
@@ -860,7 +870,7 @@ const InventoryImportPage: React.FC = () => {
                       </label>
                     </div>
 
-                    {(item.product?.hasImei || (item.product as any)?.isImei || (item.product as any)?.manageImei) && (
+                    {productTracksImei(item.product) && (
                       <div style={{ gridColumn: 'span 2', marginTop: '0.25rem', padding: '0.4rem 0.6rem', backgroundColor: '#f0f9ff', borderRadius: '0.375rem', border: '1px solid #bae6fd' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0369a1' }}>
@@ -891,6 +901,7 @@ const InventoryImportPage: React.FC = () => {
                 <tr>
                   <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '44px' }}>STT</th>
                   <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600' }}>Tên mặt hàng</th>
+                  <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '300px' }}>Serial/IMEI</th>
                   <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '130px' }}>HSD</th>
                   <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '90px' }}>ĐVT</th>
                   <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '110px', textAlign: 'right' }}>SL nhập</th>
@@ -903,7 +914,7 @@ const InventoryImportPage: React.FC = () => {
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                    <td colSpan={10} style={{ padding: '2rem 1rem', textAlign: 'center', color: '#94a3b8' }}>
+                      <td colSpan={10} style={{ padding: '2rem 1rem', textAlign: 'center', color: '#94a3b8' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
                         <div style={{ padding: '0.65rem', borderRadius: '50%', backgroundColor: '#f1f5f9' }}>
                           <Search size={24} />
@@ -927,44 +938,27 @@ const InventoryImportPage: React.FC = () => {
                     <td style={{ padding: '0.6rem 1rem' }}>
                       <div style={{ fontWeight: '600', color: '#1e293b' }}>{item.product.name}</div>
                       <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{item.product.barcode || item.product.productCode || ''}</div>
-                      {/* Dòng điền IMEI trực tiếp - chỉ hiện khi sản phẩm bật tính năng quản lý IMEI */}
-                      {(item.product?.hasImei || (item.product as any)?.isImei || (item.product as any)?.manageImei) && (
-                        <div style={{ marginTop: '0.4rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                            <span style={{ 
-                              fontSize: '0.72rem', 
-                              fontWeight: '700', 
-                              color: (item.imeis || []).length >= totalQty && totalQty > 0 ? '#059669' : '#d97706',
-                              backgroundColor: (item.imeis || []).length >= totalQty && totalQty > 0 ? '#dcfce7' : '#fef3c7',
-                              padding: '0.15rem 0.4rem',
-                              borderRadius: '0.25rem',
-                              whiteSpace: 'nowrap'
-                            }}>
-                              Mã IMEI ({(item.imeis || []).length}/{totalQty}):
-                            </span>
-                            <input
-                              type="text"
-                              placeholder="Điền hoặc quét mã IMEI (mỗi mã cách nhau bởi dấu phẩy)..."
-                              value={(item.imeis || []).join(', ')}
-                              onChange={(e) => {
-                                const list = e.target.value.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-                                handleUpdateItem(item.id, { imeis: list });
-                              }}
-                              style={{
-                                flex: 1,
-                                minWidth: '240px',
-                                padding: '0.25rem 0.5rem',
-                                fontSize: '0.78rem',
-                                fontFamily: 'monospace',
-                                border: '1px solid #7dd3fc',
-                                borderRadius: '0.25rem',
-                                outline: 'none',
-                                backgroundColor: '#f0f9ff'
-                              }}
-                            />
-                          </div>
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem' }}>
+                      {productTracksImei(item.product) ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (item.imeis || []).length >= totalQty && totalQty > 0 ? '#059669' : '#d97706' }}>
+                            {(item.imeis || []).length}/{totalQty} mã
+                          </span>
+                          <textarea
+                            aria-label={`Serial/IMEI cho ${item.product.name}`}
+                            placeholder="Nhập hoặc quét mã, phân cách bằng dấu phẩy hoặc xuống dòng"
+                            rows={2}
+                            value={item.serialInput ?? (item.imeis || []).join(', ')}
+                            onChange={(e) => {
+                              const serialInput = e.target.value;
+                              const list = serialInput.split(/[\n,]+/).map(value => value.trim()).filter(Boolean);
+                              handleUpdateItem(item.id, { serialInput, imeis: list });
+                            }}
+                            style={{ width: '280px', maxWidth: '100%', padding: '0.35rem 0.5rem', fontSize: '0.78rem', fontFamily: 'monospace', border: '1px solid #7dd3fc', borderRadius: '0.25rem', outline: 'none', backgroundColor: '#f0f9ff', resize: 'vertical' }}
+                          />
                         </div>
-                      )}
+                      ) : <span style={{ color: '#94a3b8' }}>--</span>}
                     </td>
                     <td style={{ padding: '0.6rem 1rem' }}>
                       <input

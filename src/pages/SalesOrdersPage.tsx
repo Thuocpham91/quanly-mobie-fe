@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Search, 
   Eye, 
+  Pencil,
   X, 
   Calendar, 
   User, 
@@ -17,10 +18,14 @@ import {
   Clock,
   FileSpreadsheet,
   SlidersHorizontal,
-  Receipt
+  Receipt,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { getOrders, updateOrderStatus, updateOrderDate, getOrderById, importOrdersExcel, importOrderDetailsExcel, type Order } from '../api/orders';
+import { getOrders, updateOrderStatus, updateOrderDate, updateOrder, getOrderById, importOrdersExcel, importOrderDetailsExcel, type Order, type UpdateOrderPayload } from '../api/orders';
+import { getProductsPaginated, type Product } from '../api/inventory';
+import { searchCustomers } from '../api/customers';
 import Pagination from '../components/Pagination';
 import SearchDrawer from '../components/SearchDrawer';
 import { useBranchContext } from '../context/BranchContext';
@@ -52,6 +57,15 @@ const SalesOrdersPage: React.FC = () => {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isEditingDate, setIsEditingDate] = useState(false);
   const [editingDateValue, setEditingDateValue] = useState('');
+  const [isEditingOrder, setIsEditingOrder] = useState(false);
+  const [editCustomerId, setEditCustomerId] = useState<string | null>(null);
+  const [editCustomerName, setEditCustomerName] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [editItems, setEditItems] = useState<{ productId: string; productName: string; quantity: number; unitPrice: number }[]>([]);
+  const [editDiscount, setEditDiscount] = useState(0);
+  const [editPaymentMethod, setEditPaymentMethod] = useState<Order['paymentMethod']>('CASH');
+  const [editNotes, setEditNotes] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importedCount, setImportedCount] = useState<number | null>(null);
@@ -82,7 +96,14 @@ const SalesOrdersPage: React.FC = () => {
   });
 
   const rawOrders = paginatedData?.data || [];
-  const meta = paginatedData?.meta;
+  const totalItems = paginatedData?.meta?.total ?? (paginatedData as any)?.total ?? rawOrders.length;
+  const totalPages = paginatedData?.meta?.totalPages ?? Math.max(1, Math.ceil((totalItems || 0) / limit));
+  const meta = paginatedData?.meta || {
+    total: totalItems,
+    page,
+    limit,
+    totalPages,
+  };
 
   // --- DETAIL API QUERY ---
   // To get items and product details for the selected order
@@ -91,6 +112,19 @@ const SalesOrdersPage: React.FC = () => {
     queryFn: () => getOrderById(selectedOrder!.id),
     enabled: !!selectedOrder?.id,
   });
+
+  const { data: editCustomerData } = useQuery({
+    queryKey: ['orderEditCustomers', selectedBranchId, customerSearch],
+    queryFn: () => searchCustomers(customerSearch.trim(), selectedBranchId || undefined, 1, 10),
+    enabled: isEditingOrder && customerSearch.trim().length >= 2,
+  });
+  const { data: editProductData } = useQuery({
+    queryKey: ['orderEditProducts', productSearch],
+    queryFn: () => getProductsPaginated(1, 20, undefined, productSearch.trim() || undefined),
+    enabled: isEditingOrder,
+  });
+  const editCustomers = editCustomerData?.data || [];
+  const editProducts = (editProductData?.data || []) as Product[];
 
   // --- MUTATIONS ---
 
@@ -126,6 +160,21 @@ const SalesOrdersPage: React.FC = () => {
     }
   });
 
+  const updateOrderMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateOrderPayload }) => updateOrder(id, payload),
+    onSuccess: (updatedOrder) => {
+      queryClient.invalidateQueries({ queryKey: ['salesOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['salesOrderDetail', updatedOrder.id] });
+      setSelectedOrder(updatedOrder);
+      setIsEditingOrder(false);
+      alert('Đã cập nhật đơn hàng thành công.');
+    },
+    onError: (err: any) => {
+      console.error(err);
+      alert(err.response?.data?.message || err.message || 'Không thể cập nhật đơn hàng.');
+    },
+  });
+
   // --- HANDLERS ---
 
   const handleUpdateStatus = (id: string, status: string) => {
@@ -139,7 +188,48 @@ const SalesOrdersPage: React.FC = () => {
     }
   };
 
-  // Filter orders by search term and status locally on the FE for instant reactivity
+  const beginOrderEdit = async (order: Order) => {
+    try {
+      const fullOrder = await getOrderById(order.id);
+      setSelectedOrder(fullOrder);
+      setEditCustomerId(fullOrder.customerId || null);
+      setEditCustomerName(fullOrder.customer?.fullName || 'Khách vãng lai');
+      setCustomerSearch('');
+      setProductSearch('');
+      setEditItems((fullOrder.items || []).map((item: any) => ({
+        productId: item.productId,
+        productName: item.product?.name || 'Sản phẩm',
+        quantity: Number(item.quantity || 1),
+        unitPrice: Number(item.unitPrice || 0),
+      })));
+      setEditDiscount(Number(fullOrder.discount || 0));
+      setEditPaymentMethod(fullOrder.paymentMethod || 'CASH');
+      setEditNotes(fullOrder.notes || '');
+      setIsEditingOrder(true);
+    } catch (err: any) {
+      alert(err.response?.data?.message || err.message || 'Không thể tải đơn hàng để chỉnh sửa.');
+    }
+  };
+
+  const submitOrderEdit = () => {
+    if (!selectedOrder) return;
+    if (editItems.length === 0 || editItems.some(item => !item.productId || item.quantity <= 0 || item.unitPrice < 0)) {
+      alert('Vui lòng kiểm tra sản phẩm, số lượng và đơn giá.');
+      return;
+    }
+    updateOrderMutation.mutate({
+      id: selectedOrder.id,
+      payload: {
+        customerId: editCustomerId,
+        items: editItems.map(({ productId, quantity, unitPrice }) => ({ productId, quantity, unitPrice })),
+        discount: editDiscount,
+        paymentMethod: editPaymentMethod,
+        notes: editNotes,
+      },
+    });
+  };
+
+  // Search is handled by the API; only apply filters that are not handled there.
   const filteredOrders = rawOrders.filter(order => {
     // Branch filter
     if (selectedBranchId && order.branchId !== selectedBranchId) {
@@ -155,22 +245,19 @@ const SalesOrdersPage: React.FC = () => {
       return false;
     }
 
-    // Search query (code, customer name, customer phone)
-    if (searchTerm.trim() !== '') {
-      const query = searchTerm.toLowerCase();
-      const codeMatches = order.orderCode.toLowerCase().includes(query);
-      const customerNameMatches = order.customer?.fullName.toLowerCase().includes(query) || false;
-      const customerPhoneMatches = order.customer?.phone.includes(query) || false;
-      
-      return codeMatches || customerNameMatches || customerPhoneMatches;
-    }
-
     return true;
   });
 
   // Stats calculation
   const completedOrders = rawOrders.filter(o => o.status === 'COMPLETED');
   const totalRevenue = completedOrders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+
+  const getCustomerPaidAmount = (order: Order) => {
+    if (typeof order.walletCreditAmount === 'number' && order.walletCreditAmount > 0) {
+      return Number(order.walletCreditAmount);
+    }
+    return Number(order.totalAmount || 0);
+  };
 
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { bg: string; text: string; label: string; icon: React.ReactNode }> = {
@@ -347,7 +434,7 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '0.25rem 0.5rem', backgroundColor: '#f8fafc', gap: '0.75rem' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100%', padding: '0.25rem 0.5rem', backgroundColor: '#f8fafc', gap: '0.75rem' }}>
       
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
@@ -488,7 +575,7 @@ const SalesOrdersPage: React.FC = () => {
       )}
 
       {/* Orders Table Card */}
-      <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
+      <div className="card" style={{ padding: '0', overflow: 'hidden', flexShrink: 0 }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
@@ -497,6 +584,8 @@ const SalesOrdersPage: React.FC = () => {
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem' }}>Thời gian</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem' }}>Khách hàng</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem' }}>Thanh toán</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem', textAlign: 'right' }}>Giảm giá</th>
+                <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem', textAlign: 'right' }}>Khách đã trả</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem' }}>Trạng thái</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem', textAlign: 'right' }}>Tổng tiền</th>
                 <th style={{ padding: '1rem 1.5rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem', textAlign: 'right' }}>Thao tác</th>
@@ -505,14 +594,14 @@ const SalesOrdersPage: React.FC = () => {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
                     <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 0.5rem', color: '#6366f1' }} />
                     Đang tải danh sách đơn hàng...
                   </td>
                 </tr>
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={9} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
                     Không tìm thấy đơn hàng nào.
                   </td>
                 </tr>
@@ -547,6 +636,16 @@ const SalesOrdersPage: React.FC = () => {
                   <td style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', color: '#475569', fontWeight: '500' }}>
                     {getPaymentMethodLabel(order.paymentMethod)}
                   </td>
+
+                  {/* Discount */}
+                  <td style={{ padding: '1rem 1.5rem', textAlign: 'right', fontSize: '0.85rem', color: '#ef4444', fontWeight: '600' }}>
+                    {formatCurrency(Number(order.discount || 0))}
+                  </td>
+
+                  {/* Customer Paid */}
+                  <td style={{ padding: '1rem 1.5rem', textAlign: 'right', fontSize: '0.85rem', color: '#059669', fontWeight: '600' }}>
+                    {formatCurrency(getCustomerPaidAmount(order))}
+                  </td>
                   
                   {/* Status */}
                   <td style={{ padding: '1rem 1.5rem' }}>
@@ -560,23 +659,22 @@ const SalesOrdersPage: React.FC = () => {
                   
                   {/* Action buttons */}
                   <td style={{ padding: '1rem 1.5rem', textAlign: 'right' }}>
-                    <button
-                      onClick={() => setSelectedOrder(order)}
-                      title="Xem chi tiết"
-                      style={{
-                        padding: '0.4rem',
-                        border: 'none',
-                        borderRadius: '0.375rem',
-                        cursor: 'pointer',
-                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
-                        color: '#6366f1',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      <Eye size={15} />
-                    </button>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.35rem' }}>
+                      <button
+                        onClick={() => setSelectedOrder(order)}
+                        title="Xem chi tiết"
+                        style={{ padding: '0.4rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', backgroundColor: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Eye size={15} />
+                      </button>
+                      <button
+                        onClick={() => void beginOrderEdit(order)}
+                        title="Chỉnh sửa đơn hàng"
+                        style={{ padding: '0.4rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#059669', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Pencil size={15} />
+                      </button>
+                    </div>
                   </td>
 
                 </tr>
@@ -586,12 +684,12 @@ const SalesOrdersPage: React.FC = () => {
         </div>
 
         {/* Pagination component */}
-        {meta && meta.totalPages > 1 && (
+        {totalPages > 1 && (
           <Pagination
-            currentPage={meta.page}
-            totalPages={meta.totalPages}
+            currentPage={meta.page || page}
+            totalPages={totalPages}
             onPageChange={setPage}
-            totalItems={meta.total}
+            totalItems={totalItems}
           />
         )}
       </div>
@@ -687,6 +785,57 @@ const SalesOrdersPage: React.FC = () => {
             </div>
 
             {/* Modal Body */}
+            {isEditingOrder ? (
+              <div style={{ padding: '1.25rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <section>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.4rem', color: '#334155' }}>Khách hàng</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#0f172a' }}>{editCustomerName}</span>
+                    {editCustomerId && <button type="button" onClick={() => { setEditCustomerId(null); setEditCustomerName('Khách vãng lai'); }} style={{ padding: '0.2rem 0.45rem', color: '#b91c1c', background: '#fef2f2', fontSize: '0.75rem' }}>Bỏ khách</button>}
+                  </div>
+                  <input value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} placeholder="Tìm khách theo tên hoặc số điện thoại" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }} />
+                  {editCustomers.length > 0 && (
+                    <div style={{ border: '1px solid #e2e8f0', borderRadius: '0.375rem', marginTop: '0.35rem', maxHeight: '140px', overflowY: 'auto' }}>
+                      {editCustomers.map(customer => <button key={customer.id} type="button" onClick={() => { setEditCustomerId(customer.id); setEditCustomerName(customer.fullName); setCustomerSearch(''); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.65rem', borderRadius: 0, background: 'white', borderBottom: '1px solid #f1f5f9' }}>{customer.fullName} · {customer.phone}</button>)}
+                    </div>
+                  )}
+                </section>
+
+                <section>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.4rem', color: '#334155' }}>Thêm sản phẩm</label>
+                  <input value={productSearch} onChange={e => setProductSearch(e.target.value)} placeholder="Tìm tên hoặc mã sản phẩm" style={{ width: '100%', padding: '0.6rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }} />
+                  <div style={{ display: 'flex', gap: '0.4rem', overflowX: 'auto', padding: '0.5rem 0' }}>
+                    {editProducts.map(product => <button key={product.id} type="button" onClick={() => setEditItems(items => [...items, { productId: product.id, productName: product.name, quantity: 1, unitPrice: Number(product.sellingPrice ?? product.salePrice ?? product.basePrice ?? product.price ?? 0) }])} style={{ flex: '0 0 auto', maxWidth: '220px', textAlign: 'left', padding: '0.5rem 0.65rem', background: '#f1f5f9', color: '#334155', fontSize: '0.78rem' }}><Plus size={13} style={{ verticalAlign: 'middle' }} /> {product.name}</button>)}
+                  </div>
+                </section>
+
+                <section>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.4rem', color: '#334155' }}>Sản phẩm trong đơn</label>
+                  {editItems.length === 0 ? <div style={{ color: '#b91c1c', fontSize: '0.85rem' }}>Đơn hàng cần có ít nhất một sản phẩm.</div> : editItems.map((item, index) => (
+                    <div key={`${item.productId}-${index}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(100px, 1fr) 76px 125px 36px', gap: '0.5rem', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: '0.82rem', color: '#334155' }}>{item.productName}</span>
+                      <input aria-label={`Số lượng ${item.productName}`} type="number" min="1" value={item.quantity} onChange={e => setEditItems(items => items.map((row, i) => i === index ? { ...row, quantity: Number(e.target.value) } : row))} style={{ width: '100%', padding: '0.45rem', border: '1px solid #cbd5e1', borderRadius: '0.3rem' }} />
+                      <input aria-label={`Đơn giá ${item.productName}`} type="number" min="0" value={item.unitPrice} onChange={e => setEditItems(items => items.map((row, i) => i === index ? { ...row, unitPrice: Number(e.target.value) } : row))} style={{ width: '100%', padding: '0.45rem', border: '1px solid #cbd5e1', borderRadius: '0.3rem' }} />
+                      <button type="button" title="Xóa sản phẩm" onClick={() => setEditItems(items => items.filter((_, i) => i !== index))} style={{ padding: '0.4rem', color: '#b91c1c', background: '#fef2f2' }}><Trash2 size={15} /></button>
+                    </div>
+                  ))}
+                </section>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>Giảm giá
+                    <input type="number" min="0" value={editDiscount} onChange={e => setEditDiscount(Number(e.target.value))} style={{ display: 'block', width: '100%', marginTop: '0.35rem', padding: '0.55rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem' }} />
+                  </label>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>Thanh toán
+                    <select value={editPaymentMethod} onChange={e => setEditPaymentMethod(e.target.value as Order['paymentMethod'])} style={{ display: 'block', width: '100%', marginTop: '0.35rem', padding: '0.55rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', background: 'white' }}>
+                      <option value="CASH">Tiền mặt</option><option value="TRANSFER">Chuyển khoản</option><option value="CARD">Quẹt thẻ</option>
+                    </select>
+                  </label>
+                </div>
+                <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#334155' }}>Ghi chú
+                  <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={2} style={{ display: 'block', width: '100%', marginTop: '0.35rem', padding: '0.55rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', resize: 'vertical' }} />
+                </label>
+              </div>
+            ) : (
             <div style={{ padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               
               {/* Top row: Customer & General Info */}
@@ -806,6 +955,7 @@ const SalesOrdersPage: React.FC = () => {
               </div>
 
             </div>
+            )}
 
             {/* Modal Footer & Actions */}
             <div style={{
@@ -818,6 +968,14 @@ const SalesOrdersPage: React.FC = () => {
             }}>
               {/* Order status modification controls */}
               <div style={{ display: 'flex', gap: '0.5rem' }}>
+                {isEditingOrder ? (
+                  <>
+                    <button type="button" onClick={submitOrderEdit} disabled={updateOrderMutation.isPending} style={{ padding: '0.45rem 1rem', backgroundColor: '#059669', color: 'white', fontSize: '0.8rem', fontWeight: 700, borderRadius: '0.375rem' }}>{updateOrderMutation.isPending ? 'Đang lưu...' : 'Lưu thay đổi'}</button>
+                    <button type="button" onClick={() => setIsEditingOrder(false)} disabled={updateOrderMutation.isPending} style={{ padding: '0.45rem 1rem', backgroundColor: '#e2e8f0', color: '#334155', fontSize: '0.8rem', fontWeight: 700, borderRadius: '0.375rem' }}>Hủy sửa</button>
+                  </>
+                ) : (
+                <>
+                <button type="button" onClick={() => void beginOrderEdit(selectedOrder)} style={{ padding: '0.45rem 1rem', backgroundColor: '#e0e7ff', color: '#4338ca', fontSize: '0.8rem', fontWeight: 700, borderRadius: '0.375rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}><Pencil size={14} /> Chỉnh sửa đơn</button>
                 {(selectedOrder.status === 'PENDING' || selectedOrder.status === 'DRAFT') && (
                   <>
                     <button
@@ -859,6 +1017,8 @@ const SalesOrdersPage: React.FC = () => {
                       <XCircle size={14} /> Hủy đơn
                     </button>
                   </>
+                )}
+                </>
                 )}
               </div>
 

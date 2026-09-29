@@ -114,7 +114,8 @@
     "fetching": "Đang tải chi nhánh...",
     "no_branches": "Không tìm thấy chi nhánh nào",
     "btn_cancel": "Hủy",
-    "btn_save": "Lưu thay đổi"
+    "btn_save": "Lưu thay đổi",
+    "btn_create": "Tạo chi nhánh"
   },
   "customers": {
     "title": "Quản lý khách hàng",
@@ -247,6 +248,7 @@
     "add_new": "Thêm nhà phân phối",
     "search_placeholder": "Tìm tên hoặc số điện thoại...",
     "table_name": "Tên nhà cung cấp",
+    "table_code": "Mã nhà cung cấp",
     "table_contact": "Thông tin liên hệ",
     "table_address": "Địa chỉ",
     "table_actions": "Thao tác",

@@ -80,7 +80,7 @@ const ProductsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['productImportHistory'] });
       queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
     } catch (error: any) {
-      const errMsg = error?.response?.data?.message || error?.message || 'Có lỗi xảy ra khi import sản phẩm';
+      const errMsg = error?.response?.data?.message || error?.message || 'Có lỗi xảy ra khi import chi tiết nhập hàng sản phẩm';
       alert(Array.isArray(errMsg) ? errMsg.join('; ') : errMsg);
     } finally {
       setIsImporting(false);
@@ -291,7 +291,7 @@ const ProductsPage: React.FC = () => {
             style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.85rem', fontSize: '0.85rem', borderRadius: '0.375rem' }}
           >
             <FileSpreadsheet size={16} />
-            {isImporting ? 'Đang import...' : 'Import Excel'}
+            {isImporting ? 'Đang import...' : 'Import chi tiết nhập hàng sản phẩm'}
           </button>
 
           {importResults && importResults.failed.length > 0 && (
@@ -333,19 +333,15 @@ const ProductsPage: React.FC = () => {
               <th style={{ padding: '1rem' }}>{t('products.table_stt')}</th>
               {activeTab === 'products' ? (
                 <>
-                  <th style={{ padding: '1rem' }}>Mã SP</th>
-                  <th style={{ padding: '1rem' }}>Tên</th>
-                  <th style={{ padding: '1rem' }}>Danh mục</th>
-                  <th style={{ padding: '1rem' }}>Đơn vị</th>
-                  <th style={{ padding: '1rem' }}>Nhà SX</th>
-                  <th style={{ padding: '1rem' }}>Giá gốc</th>
-                  <th style={{ padding: '1rem' }}>Giá nhập</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>SL</th>
-                  <th style={{ padding: '1rem' }}>Tổng tiền</th>
-                  <th style={{ padding: '1rem' }}>Còn trả NCC</th>
-                  <th style={{ padding: '1rem' }}>Tiền trả NCC</th>
+                  <th style={{ padding: '1rem' }}>Tên sản phẩm</th>
+                  <th style={{ padding: '1rem' }}>Mã vạch</th>
+                  <th style={{ padding: '1rem' }}>Mã hàng hóa</th>
+                  <th style={{ padding: '1rem', textAlign: 'center' }}>Tổng số</th>
+                  <th style={{ padding: '1rem' }}>Trạng thái</th>
+                  <th style={{ padding: '1rem', textAlign: 'center' }}>Tồn kho</th>
+                  <th style={{ padding: '1rem', textAlign: 'center', minWidth: '120px' }}>Serial/IMEI</th>
+                  <th style={{ padding: '1rem' }}>Thương hiệu</th>
                   <th style={{ padding: '1rem' }}>Ghi chú</th>
-                  <th style={{ padding: '1rem', textAlign: 'center' }}>{t('products.table_stock')}</th>
                 </>
               ) : (
                 <>
@@ -359,41 +355,31 @@ const ProductsPage: React.FC = () => {
           <tbody>
             {loadingProducts ? (
               <tr>
-                <td colSpan={activeTab === 'products' ? 14 : 4} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+                <td colSpan={activeTab === 'products' ? 11 : 4} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
                   {t('products.loading')}
                 </td>
               </tr>
             ) : activeTab === 'products' ? (
               filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={14} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={11} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
                     {t('products.no_products')}
                   </td>
                 </tr>
               ) : (
                 filteredProducts.map((p: any, idx: number) => {
-                  const basePrice = Number(p.basePrice ?? p.importPrice ?? 0);
-                  const importPrice = Number(p.importPrice ?? p.basePrice ?? 0);
-                  const quantity = Number(p.quantity ?? 0);
-                  const totalAmount = Number(p.totalAmount ?? (quantity * importPrice));
-                  const canTraNcc = Number(p.canTraNcc ?? 0);
-                  const tienTraNcc = Number(p.tienTraNcc ?? 0);
                   const fullProductName = p.name || '--';
-                  const displayProductName = fullProductName.length > 10 ? `${fullProductName.slice(0, 10)}...` : fullProductName;
+                  const displayProductName = fullProductName.length > 25 ? `${fullProductName.slice(0, 25)}...` : fullProductName;
 
                   return (
                     <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '1rem', color: '#64748b' }}>{idx + 1}</td>
-                      <td style={{ padding: '1rem' }}>
-                        <div style={{ fontWeight: '600', color: '#1e293b' }}>{p.productCode || '--'}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{p.barcode || ''}</div>
-                      </td>
                       <td
                         style={{
                           padding: '1rem',
                           fontWeight: '500',
-                          minWidth: '220px',
-                          maxWidth: '260px',
+                          minWidth: '200px',
+                          maxWidth: '280px',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
@@ -402,7 +388,7 @@ const ProductsPage: React.FC = () => {
                       >
                         <span
                           onClick={() => navigate(`/admin/products/${p.id}`)}
-                          style={{ display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'middle', color: '#2563eb', cursor: 'pointer' }}
+                          style={{ display: 'inline-block', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', verticalAlign: 'middle', color: '#2563eb', cursor: 'pointer', fontWeight: 600 }}
                         >
                           {displayProductName}
                         </span>
@@ -417,16 +403,26 @@ const ProductsPage: React.FC = () => {
                           </span>
                         )}
                       </td>
-                      <td style={{ padding: '1rem', color: '#64748b' }}>{p.category?.name || '--'}</td>
-                      <td style={{ padding: '1rem', color: '#64748b' }}>{p.unit?.name || '--'}</td>
-                      <td style={{ padding: '1rem', color: '#64748b' }}>{p.manufacturer || '--'}</td>
-                      <td style={{ padding: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{basePrice ? basePrice.toLocaleString('vi-VN') : '--'}</td>
-                      <td style={{ padding: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{importPrice ? importPrice.toLocaleString('vi-VN') : '--'}</td>
-                      <td style={{ padding: '1rem', textAlign: 'center', color: '#64748b' }}>{quantity}</td>
-                      <td style={{ padding: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{totalAmount ? totalAmount.toLocaleString('vi-VN') : '--'}</td>
-                      <td style={{ padding: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{canTraNcc ? canTraNcc.toLocaleString('vi-VN') : '--'}</td>
-                      <td style={{ padding: '1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{tienTraNcc ? tienTraNcc.toLocaleString('vi-VN') : '--'}</td>
-                      <td style={{ padding: '1rem', color: '#64748b', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.note || ''}>{p.note || '--'}</td>
+                      <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem' }}>{p.barcode || '--'}</td>
+                      <td style={{ padding: '1rem', fontWeight: '600', color: '#1e293b' }}>{p.productCode || '--'}</td>
+                      <td style={{ padding: '1rem', textAlign: 'center', color: '#1e293b', fontWeight: 500 }}>{Number(p.quantity ?? 0)}</td>
+                      <td style={{ padding: '1rem' }}>
+                        {p.status ? (
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '0.2rem 0.55rem',
+                            borderRadius: '0.375rem',
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            backgroundColor: '#f1f5f9',
+                            color: '#334155',
+                          }}>
+                            {p.status}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#94a3b8' }}>--</span>
+                        )}
+                      </td>
                       <td style={{ padding: '1rem', textAlign: 'center' }}>
                         <span style={{ 
                           fontWeight: '700', 
@@ -439,6 +435,29 @@ const ProductsPage: React.FC = () => {
                           {stockMap[p.id] || 0}
                         </span>
                       </td>
+                      <td style={{ padding: '1rem', color: '#334155', maxWidth: '220px' }}>
+                        {p.hasImei ? (
+                          <div
+                            title={(p.imeis || []).join(', ') || 'Chưa có Serial/IMEI'}
+                            style={{
+                              display: 'inline-block',
+                              maxWidth: '100%',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              color: '#4f46e5',
+                              fontWeight: 600,
+                              fontSize: '0.8rem'
+                            }}
+                          >
+                            {(p.imeis && p.imeis.length > 0) ? p.imeis.join(', ') : 'Chưa có Serial/IMEI'}
+                          </div>
+                        ) : (
+                          <span style={{ color: '#64748b', fontSize: '0.8rem' }}>--</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '1rem', color: '#64748b' }}>{p.manufacturer || '--'}</td>
+                      <td style={{ padding: '1rem', color: '#64748b', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.note || ''}>{p.note || '--'}</td>
                       <td style={{ padding: '1rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem' }}>
                           <button onClick={() => navigate(`/admin/products/${p.id}`)} style={{ color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }} title="Xem chi tiết"><Eye size={16} /></button>

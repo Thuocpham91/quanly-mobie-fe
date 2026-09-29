@@ -6,13 +6,16 @@ import { useTranslation } from 'react-i18next';
 import DistributorModal from '../components/DistributorModal';
 import DistributorHistoryModal from '../components/DistributorHistoryModal';
 import SearchDrawer from '../components/SearchDrawer';
+import Pagination from '../components/Pagination';
 
 const DistributorsPage: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [addressFilter, setAddressFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
   const [isSearchDrawerOpen, setIsSearchDrawerOpen] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,25 +28,30 @@ const DistributorsPage: React.FC = () => {
   const resetFilters = () => {
     setSearchTerm('');
     setAddressFilter('');
+    setCurrentPage(1);
   };
 
-  const { data: distributors = [], isLoading } = useQuery<Distributor[]>({
-    queryKey: ['distributors'],
-    queryFn: getDistributors,
+  const { data: distributorPage, isLoading } = useQuery({
+    queryKey: ['distributors', currentPage, pageSize, searchTerm, addressFilter],
+    queryFn: () => getDistributors({
+      page: currentPage,
+      limit: pageSize,
+      search: searchTerm.trim() || undefined,
+      address: addressFilter.trim() || undefined,
+    }),
   });
+  const distributors = distributorPage?.data ?? [];
+  const totalPages = Math.max(1, distributorPage?.meta.totalPages ?? 1);
 
-  const filteredDistributors = distributors.filter(d => {
-    const q = searchTerm.toLowerCase().trim();
-    const matchesSearch =
-      !q ||
-      d.name.toLowerCase().includes(q) || 
-      (d.phone && d.phone.includes(q)) ||
-      (d.email && d.email.toLowerCase().includes(q));
+  const updateSearchTerm = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
 
-    const matchesAddress = !addressFilter || (d.address && d.address.toLowerCase().includes(addressFilter.toLowerCase()));
-
-    return matchesSearch && matchesAddress;
-  });
+  const updateAddressFilter = (value: string) => {
+    setAddressFilter(value);
+    setCurrentPage(1);
+  };
 
   const createMutation = useMutation({
     mutationFn: createDistributor,
@@ -111,7 +119,7 @@ const DistributorsPage: React.FC = () => {
               type="text" 
               placeholder={t('distributors.search_placeholder')} 
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => updateSearchTerm(e.target.value)}
               style={{
                 width: '100%',
                 padding: '0.45rem 0.85rem 0.45rem 2.2rem',
@@ -174,6 +182,7 @@ const DistributorsPage: React.FC = () => {
             <thead style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid var(--border)' }}>
               <tr>
                 <th style={{ padding: '0.75rem 1.25rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem' }}>{t('distributors.table_name')}</th>
+                <th style={{ padding: '0.75rem 1.25rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem' }}>{t('distributors.table_code')}</th>
                 <th style={{ padding: '0.75rem 1.25rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem' }}>{t('distributors.table_contact')}</th>
                 <th style={{ padding: '0.75rem 1.25rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem' }}>{t('distributors.table_address')}</th>
                 <th style={{ padding: '0.75rem 1.25rem', fontWeight: '600', color: '#64748b', fontSize: '0.85rem', textAlign: 'right' }}>{t('distributors.table_actions')}</th>
@@ -182,13 +191,13 @@ const DistributorsPage: React.FC = () => {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={4} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('distributors.fetching')}</td>
+                  <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('distributors.fetching')}</td>
                 </tr>
-              ) : filteredDistributors.length === 0 ? (
+              ) : distributors.length === 0 ? (
                 <tr>
-                  <td colSpan={4} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('distributors.no_distributors')}</td>
+                  <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>{t('distributors.no_distributors')}</td>
                 </tr>
-              ) : filteredDistributors.map((distributor) => (
+              ) : distributors.map((distributor) => (
                 <tr key={distributor.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background-color 0.2s' }}>
                   <td style={{ padding: '0.85rem 1.25rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -209,9 +218,12 @@ const DistributorsPage: React.FC = () => {
                         style={{ fontWeight: '600', fontSize: '0.875rem', color: '#2563eb', cursor: 'pointer', textDecoration: 'underline' }}
                         title="Bấm để xem lịch sử nhập hàng"
                       >
-                        {distributor.name}
+                        {distributor.name || '—'}
                       </div>
                     </div>
+                  </td>
+                  <td style={{ padding: '0.85rem 1.25rem', fontSize: '0.85rem', color: '#475569', whiteSpace: 'nowrap' }}>
+                    {distributor.code || '—'}
                   </td>
                   <td style={{ padding: '0.85rem 1.25rem' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
@@ -271,6 +283,12 @@ const DistributorsPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={distributorPage?.meta.total ?? 0}
+        />
       </div>
 
       <DistributorModal
@@ -303,7 +321,7 @@ const DistributorsPage: React.FC = () => {
               type="text"
               placeholder="Tên nhà phân phối, SĐT, Email..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => updateSearchTerm(e.target.value)}
               style={{
                 width: '100%',
                 padding: '0.6rem 0.85rem',
@@ -323,7 +341,7 @@ const DistributorsPage: React.FC = () => {
               type="text"
               placeholder="Tìm theo tỉnh thành, đường, địa chỉ..."
               value={addressFilter}
-              onChange={(e) => setAddressFilter(e.target.value)}
+              onChange={(e) => updateAddressFilter(e.target.value)}
               style={{
                 width: '100%',
                 padding: '0.6rem 0.85rem',
