@@ -15,13 +15,16 @@ export interface Role {
 }
 
 export const getRoles = async () => {
-  const response = await client.get<Role[]>('/roles');
-  return response.data;
+  const response = await client.get<Role[] | { data?: Role[] }>('/roles');
+  return Array.isArray(response.data) ? response.data : response.data?.data || [];
 };
 
 export const getPermissions = async () => {
-  const response = await client.get<Record<string, Permission[]>>('/roles/permissions');
-  return response.data;
+  const response = await client.get<Record<string, Permission[]> | { data?: Record<string, Permission[]> }>('/roles/permissions');
+  if (response.data && !Array.isArray(response.data) && 'data' in response.data && response.data.data) {
+    return response.data.data;
+  }
+  return response.data as Record<string, Permission[]>;
 };
 
 export const createRole = async (data: { name: string; description?: string; permissionIds: string[] }) => {

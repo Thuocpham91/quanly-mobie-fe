@@ -69,6 +69,7 @@ const SalesOrdersPage: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importedCount, setImportedCount] = useState<number | null>(null);
+  const [importDetailsResult, setImportDetailsResult] = useState<{ imported: number; errors: number } | null>(null);
   const importFileRef = useRef<HTMLInputElement | null>(null);
   const importDetailsFileRef = useRef<HTMLInputElement | null>(null);
 
@@ -400,6 +401,7 @@ const SalesOrdersPage: React.FC = () => {
     setIsImporting(true);
     setImportErrors([]);
     setImportedCount(null);
+    setImportDetailsResult(null);
 
     try {
       // createMissingOrders=true, skipStockDeduction=true by default
@@ -420,9 +422,7 @@ const SalesOrdersPage: React.FC = () => {
         if (typeof err === 'string') return err;
         return `Dòng ${err.row || '?'}: ${err.reason || err.message || JSON.stringify(err)}`;
       }));
-      if (errors.length > 0) {
-        alert(`Một số dòng không import được. Vui lòng kiểm tra chi tiết.`);
-      }
+      setImportDetailsResult({ imported: response.imported || 0, errors: errors.length });
       queryClient.invalidateQueries({ queryKey: ['salesOrders'] });
     } catch (err: any) {
       console.error(err);
@@ -571,6 +571,23 @@ const SalesOrdersPage: React.FC = () => {
               </ul>
             </div>
           )}
+        </div>
+      )}
+
+      {importDetailsResult && (
+        <div role="dialog" aria-modal="true" aria-labelledby="import-details-result-title" style={{ position: 'fixed', inset: 0, zIndex: 1200, backgroundColor: 'rgba(15, 23, 42, 0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div style={{ width: '100%', maxWidth: '420px', backgroundColor: 'white', borderRadius: '0.75rem', boxShadow: '0 20px 40px rgba(15, 23, 42, 0.2)', padding: '1.5rem' }}>
+            <h2 id="import-details-result-title" style={{ margin: '0 0 0.75rem', fontSize: '1.1rem', color: importDetailsResult.errors > 0 ? '#92400e' : '#166534' }}>
+              {importDetailsResult.errors > 0 ? 'Import hoàn tất một phần' : 'Import chi tiết thành công'}
+            </h2>
+            <p style={{ margin: '0 0 1.25rem', color: '#475569', lineHeight: 1.5 }}>
+              Đã import thành công <strong>{importDetailsResult.imported}</strong> dòng chi tiết đơn hàng.
+              {importDetailsResult.errors > 0 && <> Có <strong style={{ color: '#b91c1c' }}>{importDetailsResult.errors}</strong> dòng bị lỗi, vui lòng kiểm tra chi tiết bên dưới.</>}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="button" onClick={() => setImportDetailsResult(null)} style={{ padding: '0.55rem 1.1rem', backgroundColor: '#6366f1', color: 'white', borderRadius: '0.375rem', fontWeight: 700 }}>Đóng</button>
+            </div>
+          </div>
         </div>
       )}
 

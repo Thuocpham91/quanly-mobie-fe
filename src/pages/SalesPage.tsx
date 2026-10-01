@@ -19,11 +19,14 @@ import {
   Package,
   Calendar
 } from 'lucide-react';
-import { getInventorySummary, getCategories, getProducts, type Product } from '../api/inventory';
+
+
+import { createProduct, getInventorySummary, getCategories, getProducts, type Product } from '../api/inventory';
 import { searchCustomers, createCustomer, type Customer } from '../api/customers';
 import { createOrder, type CreateOrderPayload } from '../api/orders';
 import { getDashboardStatistics, type DashboardStatisticsResponse } from '../api/dashboard';
 import { useBranchContext } from '../context/BranchContext';
+import ProductModal from '../components/ProductModal';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -59,6 +62,8 @@ const SalesPage: React.FC = () => {
   const [quickName, setQuickName] = useState('');
   const [quickPhone, setQuickPhone] = useState('');
   const [quickAddress, setQuickAddress] = useState('');
+  const [isCreateProductOpen, setIsCreateProductOpen] = useState(false);
+  const [newProductBarcode, setNewProductBarcode] = useState('');
 
   // --- API QUERIES ---
   
@@ -125,12 +130,32 @@ const SalesPage: React.FC = () => {
     }
   });
 
+  const createProductMutation = useMutation({
+    mutationFn: (data: Partial<Product>) => createProduct(data),
+    onSuccess: (product) => {
+      queryClient.invalidateQueries({ queryKey: ['salesInventorySummary', selectedBranchId] });
+      queryClient.invalidateQueries({ queryKey: ['salesProductsBranchPrices', selectedBranchId] });
+      setIsCreateProductOpen(false);
+      setSearchTerm(product.barcode || product.productCode || product.name);
+      alert(`Đã tạo sản phẩm "${product.name}" thành công.`);
+    },
+    onError: (err: any) => {
+      console.error(err);
+      alert(err.response?.data?.message || err.message || 'Không thể tạo sản phẩm.');
+    },
+  });
+
   // Create Order Mutation
   const createOrderMutation = useMutation({
     mutationFn: (payload: CreateOrderPayload) => createOrder(payload),
     onSuccess: (data) => {
-      // Invalidate queries to refresh stock counts
+      // The order API deducts sold quantities and creates SALE stock history.
+      // Refresh all affected views after the transaction is committed.
       queryClient.invalidateQueries({ queryKey: ['salesInventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['salesProductsBranchPrices'] });
+      queryClient.invalidateQueries({ queryKey: ['stockHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
       alert(`Thanh toán thành công! Mã đơn hàng: ${data.orderCode}`);
       // Clear Cart
       setCart([]);
@@ -292,6 +317,11 @@ const SalesPage: React.FC = () => {
     ? filteredProducts.slice(0, 20)
     : filteredProducts;
 
+  const openCreateProduct = () => {
+    setNewProductBarcode(searchTerm.trim());
+    setIsCreateProductOpen(true);
+  };
+
   return (
     <div style={{
       display: 'grid',
@@ -404,7 +434,13 @@ const SalesPage: React.FC = () => {
             </div>
           ) : displayedProducts.length === 0 ? (
             <div style={{ padding: '4rem', textAlign: 'center', color: '#64748b' }}>
-              Không tìm thấy sản phẩm nào.
+              <Package size={36} style={{ margin: '0 auto 0.75rem', color: '#94a3b8' }} />
+              <div style={{ marginBottom: '1rem' }}>Không tìm thấy sản phẩm nào với từ khóa "{searchTerm}".</div>
+              {searchTerm.trim() && (
+                <button type="button" onClick={openCreateProduct} className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Plus size={16} /> Tạo sản phẩm mới
+                </button>
+              )}
             </div>
           ) : (
             <div style={{
@@ -585,6 +621,18 @@ const SalesPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      <ProductModal
+        isOpen={isCreateProductOpen}
+        onClose={() => setIsCreateProductOpen(false)}
+        initialBarcode={newProductBarcode}
+        onSubmit={async (data) => {
+          await createProductMutation.mutateAsync({
+            ...data,
+            isService: false,
+          });
+        }}
+      />
 
       {/* RIGHT COLUMN: GIỎ HÀNG & THANH TOÁN */}
       <div style={{

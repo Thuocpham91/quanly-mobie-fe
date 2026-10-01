@@ -315,7 +315,7 @@ const DashboardHome: React.FC = () => {
             ? <Skeleton height="100%" style={{ borderRadius: "0.75rem" }} />
             : data && data.chartData.length > 0
               ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                   <LineChart data={data.chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="date" tickFormatter={v => { const d = new Date(v); return `${d.getDate()}/${d.getMonth()+1}`; }}
@@ -344,7 +344,7 @@ const DashboardHome: React.FC = () => {
             <div style={{ height: "200px" }}>
               {loading ? <Skeleton height="100%" style={{ borderRadius: "0.75rem" }} /> :
                chartData && chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={160}>
                   <PieChart>
                     <Pie data={chartData} cx="50%" cy="50%" innerRadius={50} outerRadius={78} paddingAngle={3} dataKey="value" labelLine={false} label={renderCustomLabel}>
                       {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} stroke="none" />)}

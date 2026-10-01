@@ -11,9 +11,10 @@ interface ProductModalProps {
   onClose: () => void;
   onSubmit: (data: Partial<Product>) => Promise<void>;
   product?: Product;
+  initialBarcode?: string;
 }
 
-const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, product }) => {
+const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, product, initialBarcode = '' }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -217,10 +218,10 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
         isService: product.isService || false,
         hasImei: product.hasImei || false,
       });
-    } else if (!isOpen) {
+    } else if (isOpen) {
       setFormData({
         name: '',
-        barcode: '',
+        barcode: initialBarcode,
         productCode: '',
         manufacturer: '',
         imageUrl: '',
@@ -235,7 +236,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
         hasImei: false,
       });
     }
-  }, [product, isOpen]);
+  }, [product, isOpen, initialBarcode]);
 
   if (!isOpen) return null;
 
