@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { getDashboardStatistics } from "../api/dashboard";
 import type { DashboardStatisticsResponse } from "../api/dashboard";
+import { getImportOrders, type ImportOrder } from "../api/inventory";
 import { useBranchContext } from "../context/BranchContext";
 
 const COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
@@ -30,6 +31,59 @@ const formatShort = (value: number) => {
   if (value >= 1_000_000)     return `${(value / 1_000_000).toFixed(1)}M`;
   if (value >= 1_000)         return `${(value / 1_000).toFixed(0)}K`;
   return String(value);
+};
+
+const getDashboardData = async (startDate: string, endDate: string, branchId?: string, signal?: AbortSignal) => {
+  const [statistics, importOrders] = await Promise.all([
+    getDashboardStatistics(startDate, endDate, branchId, signal),
+    (async () => {
+      const pageSize = 100;
+      const orders: ImportOrder[] = [];
+      let page = 1;
+      let totalPages = 1;
+
+      do {
+        const response = await getImportOrders(branchId, page, pageSize, undefined, signal);
+        const pageOrders: ImportOrder[] = Array.isArray(response?.data)
+          ? response.data
+          : Array.isArray(response?.data?.data)
+            ? response.data.data
+            : Array.isArray(response)
+              ? response
+              : [];
+        orders.push(...pageOrders);
+        totalPages = Math.max(1, Number(response?.meta?.totalPages || response?.data?.meta?.totalPages || 1));
+        page += 1;
+        if (pageOrders.length === 0) break;
+      } while (page <= totalPages);
+
+      return orders;
+    })(),
+  ]);
+
+  const supplierCostsByDate = new Map<string, number>();
+  importOrders.forEach((order) => {
+    if (order.status === 'CANCELLED') return;
+    const orderDate = (order.importDate || order.createdAt || '').slice(0, 10);
+    if (orderDate < startDate || orderDate > endDate) return;
+    supplierCostsByDate.set(orderDate, (supplierCostsByDate.get(orderDate) || 0) + Number(order.debtAmount || 0));
+  });
+
+  const totalCost = [...supplierCostsByDate.values()].reduce((sum, cost) => sum + cost, 0);
+  const chartData = statistics.chartData.map((entry) => {
+    const cost = supplierCostsByDate.get(entry.date.slice(0, 10)) || 0;
+    return { ...entry, cost, profit: Number(entry.revenue || 0) - cost };
+  });
+
+  return {
+    ...statistics,
+    totals: {
+      ...statistics.totals,
+      cost: totalCost,
+      profit: Number(statistics.totals.revenue || 0) - totalCost,
+    },
+    chartData,
+  };
 };
 
 const useCounter = (target: number, duration = 900) => {
@@ -183,17 +237,25 @@ const Skeleton: React.FC<{ width?: string; height?: string; style?: React.CSSPro
 const DashboardHome: React.FC = () => {
   const { t } = useTranslation();
   const { selectedBranchId } = useBranchContext();
-  const [startDate, setStartDate] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split("T")[0]; });
-  const [endDate,   setEndDate]   = useState(() => { const d = new Date(); d.setMonth(d.getMonth() + 1, 0); return d.toISOString().split("T")[0]; });
+  const [startDate, setStartDate] = useState(() => `${new Date().getFullYear()}-01-01`);
+  const [endDate,   setEndDate]   = useState(() => new Date().toISOString().split("T")[0]);
   const [data,      setData]      = useState<DashboardStatisticsResponse | null>(null);
   const [loading,   setLoading]   = useState(true);
   const [refreshing,setRefreshing]= useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [topProductSearch, setTopProductSearch] = useState('');
 
   const fetchData = async (silent = false) => {
     if (!silent) setLoading(true); else setRefreshing(true);
-    try { const result = await getDashboardStatistics(startDate, endDate, selectedBranchId); setData(result); }
-    catch (err) { console.error("Dashboard fetch error:", err); }
+    try {
+      const result = await getDashboardData(startDate, endDate, selectedBranchId);
+      setData(result);
+      setLoadError(null);
+    }
+    catch (err: any) {
+      console.error("Dashboard fetch error:", err);
+      setLoadError(err?.response?.data?.message || err?.message || t("dashboard.empty_state"));
+    }
     finally { setLoading(false); setRefreshing(false); }
   };
 
@@ -203,11 +265,13 @@ const DashboardHome: React.FC = () => {
     const loadData = async () => {
       setLoading(true);
       try {
-        const result = await getDashboardStatistics(startDate, endDate, selectedBranchId, controller.signal);
+        const result = await getDashboardData(startDate, endDate, selectedBranchId, controller.signal);
         setData(result);
+        setLoadError(null);
       } catch (err: any) {
         if (err?.name !== 'CanceledError' && err?.code !== 'ERR_CANCELED') {
           console.error("Dashboard fetch error:", err);
+          setLoadError(err?.response?.data?.message || err?.message || t("dashboard.empty_state"));
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -294,6 +358,14 @@ const DashboardHome: React.FC = () => {
       </div>
 
       {/* ── Stat Cards ── */}
+      {loadError && (
+        <div role="alert" style={{ marginBottom: "1rem", padding: "0.875rem 1rem", borderRadius: "0.75rem", border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
+          <span>{loadError}</span>
+          <button onClick={() => fetchData()} style={{ padding: "0.4rem 0.75rem", border: "1px solid #fca5a5", borderRadius: "0.5rem", background: "white", color: "#b91c1c", cursor: "pointer", whiteSpace: "nowrap" }}>
+            {t("dashboard.refresh_tooltip")}
+          </button>
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
         {loading
           ? Array.from({ length: 5 }).map((_, i) => (

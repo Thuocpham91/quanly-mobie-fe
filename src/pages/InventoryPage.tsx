@@ -63,10 +63,19 @@ const InventoryPage: React.FC = () => {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteImportOrder,
+    mutationFn: (id: string) => deleteImportOrder(id, true),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['importOrders'] });
       queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['salesInventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['productBatches'] });
+      queryClient.invalidateQueries({ queryKey: ['productImportHistory'] });
+      queryClient.invalidateQueries({ queryKey: ['salesProductsBranchPrices'] });
+    },
+    onError: (err: any) => {
+      alert(err?.response?.data?.message || err?.message || 'Có lỗi xảy ra khi xóa phiếu nhập.');
     }
   });
 
@@ -292,13 +301,13 @@ const InventoryPage: React.FC = () => {
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Building2 size={14} /> Nhà cung cấp</div>
                 </th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>Cần trả NCC</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>Tiền đã trả NCC</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', justifyContent: 'center' }}><Package size={14} /> Tổng số mặt hàng</div>
                 </th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>Tổng tiền hàng</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>Giảm giá phiếu</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>Cần trả NCC</th>
-                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'right' }}>Tiền đã trả NCC</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: 'max-content' }}>Trạng thái</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.875rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Calendar size={14} /> Ngày nhập</div>
@@ -355,6 +364,12 @@ const InventoryPage: React.FC = () => {
                     <td style={{ padding: '1rem', color: '#1e293b', fontWeight: '500', fontSize: '0.875rem' }}>
                       {order.distributor?.name || <span style={{ color: '#94a3b8' }}>--</span>}
                     </td>
+                    <td style={{ padding: '1rem', textAlign: 'right', color: '#dc2626', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {Number(order.debtAmount ?? (Number(order.totalAmount || 0) - Number(order.paidAmount || 0))).toLocaleString()} ₫
+                    </td>
+                    <td style={{ padding: '1rem', textAlign: 'right', color: '#16a34a', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      {Number(order.paidAmount || 0).toLocaleString()} ₫
+                    </td>
                     <td style={{ padding: '1rem', textAlign: 'center', whiteSpace: 'nowrap', minWidth: 'max-content' }}>
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -369,12 +384,6 @@ const InventoryPage: React.FC = () => {
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'right', color: '#475569', whiteSpace: 'nowrap' }}>
                       {Number(order.discountAmount || 0).toLocaleString()} ₫
-                    </td>
-                    <td style={{ padding: '1rem', textAlign: 'right', color: '#dc2626', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      {Number(order.debtAmount || 0).toLocaleString()} ₫
-                    </td>
-                    <td style={{ padding: '1rem', textAlign: 'right', color: '#16a34a', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      {Number(order.paidAmount || 0).toLocaleString()} ₫
                     </td>
                     <td style={{ padding: '1rem', textAlign: 'center' }}>
                       <span style={{
@@ -401,10 +410,11 @@ const InventoryPage: React.FC = () => {
                         </button>
                         <button
                           onClick={() => {
-                            if (window.confirm('Xóa phiếu nhập này? Các lô hàng liên quan sẽ không bị xóa.'))
+                            if (window.confirm(`Xác nhận xóa phiếu nhập "${order.code}"?\n\nToàn bộ lô hàng và tồn kho của các sản phẩm thuộc phiếu nhập này sẽ được trừ/xóa khỏi hệ thống.`))
                               deleteMutation.mutate(order.id);
                           }}
                           style={{ padding: '0.35rem', color: '#ef4444', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                          title="Xóa phiếu nhập và trừ tồn kho"
                         >
                           <Trash2 size={16} />
                         </button>

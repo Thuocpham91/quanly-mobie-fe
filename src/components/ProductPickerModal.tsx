@@ -29,7 +29,9 @@ const ProductPickerModal: React.FC<ProductPickerModalProps> = ({ isOpen, onClose
     expiryDate: '',
     unitCostPrice: 0,
     costPrice: 0,
-    priceType: 'base' as 'base' | 'packaging'
+    priceType: 'base' as 'base' | 'packaging',
+    imeisText: '',
+    trackImei: false,
   });
 
   const { data: units = [] } = useQuery({ queryKey: ['units'], queryFn: getUnits, enabled: isOpen });
@@ -125,129 +127,360 @@ const ProductPickerModal: React.FC<ProductPickerModalProps> = ({ isOpen, onClose
 
                 return (
                   <div key={p.id} style={{ 
-                    padding: '1rem', borderBottom: '1px solid #f1f5f9', 
-                    backgroundColor: selectedProductId === p.id ? '#f0fdf4' : 'transparent',
-                    transition: 'background-color 0.2s',
-                    borderRadius: '0.5rem',
-                    marginBottom: '0.5rem'
+                    borderRadius: '0.75rem',
+                    marginBottom: '0.75rem',
+                    transition: 'all 0.2s ease',
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: selectedProductId === p.id ? '1rem' : 0 }}>
-                      <div>
-                        <div style={{ fontWeight: '600', color: '#1e293b' }}>{p.name}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Mã: {p.productCode || '--'} | Vạch: {p.barcode || '--'}</div>
+                    {/* Header item bar */}
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      padding: '0.85rem 1rem', 
+                      backgroundColor: selectedProductId === p.id ? '#f0fdf4' : '#ffffff',
+                      border: selectedProductId === p.id ? '1px solid #10b981' : '1px solid #e2e8f0',
+                      borderRadius: selectedProductId === p.id ? '0.75rem 0.75rem 0 0' : '0.75rem',
+                      boxShadow: selectedProductId === p.id ? '0 1px 3px rgba(16, 185, 129, 0.1)' : '0 1px 2px rgba(0,0,0,0.03)',
+                    }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#0f172a' }}>{p.name}</span>
+                          {p.productCode ? (
+                            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#0369a1', backgroundColor: '#e0f2fe', padding: '0.15rem 0.5rem', borderRadius: '0.375rem' }}>
+                              Mã: {p.productCode}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.72rem', color: '#94a3b8', backgroundColor: '#f1f5f9', padding: '0.15rem 0.5rem', borderRadius: '0.375rem' }}>Chưa có mã</span>
+                          )}
+                          {(p.hasImei || (p as any).isImei || (p as any).manageImei || (p.imeis && p.imeis.length > 0)) && (
+                            <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6d28d9', backgroundColor: '#ede9fe', padding: '0.15rem 0.45rem', borderRadius: '0.375rem' }}>
+                              Serial/IMEI
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                          <span>Mã vạch: <strong style={{ color: '#334155' }}>{p.barcode || '--'}</strong></span>
+                          <span>Đơn vị: <strong style={{ color: '#334155' }}>{units.find((u: any) => u.id === p.unitId)?.name || '--'}</strong></span>
+                          <span>Giá nhập: <strong style={{ color: '#0891b2' }}>{p.importPrice ? formatNumber(p.importPrice) + ' ₫' : '--'}</strong></span>
+                        </div>
                       </div>
-                      <button 
-                        className="btn-primary" 
-                        onClick={() => {
-                          if (selectedProductId === p.id) {
-                            onSelect(p, {
-                              ...details,
-                              quantityPieces: totalPieces,
-                              conversionFactor: 1, 
-                              quantityBoxes: 0 
-                            });
-                            setSelectedProductId(null);
-                          } else {
-                            setSelectedProductId(p.id);
-                            const defaultPrice = p.basePrice || 0;
-                            setDetails({
-                              baseUnitId: p.unitId || '',
-                              unitQuantities: {},
-                              unitCostPrice: defaultPrice,
-                              costPrice: 0,
-                              expiryDate: '',
-                              priceType: 'base'
-                            });
-                          }
-                        }}
-                        style={{ 
-                          padding: '0.4rem 1rem', fontSize: '0.875rem', 
-                          backgroundColor: selectedProductId === p.id ? '#10b981' : '#f1f5f9',
-                          color: selectedProductId === p.id ? 'white' : '#1e293b',
-                          border: 'none',
-                          cursor: 'pointer',
-                          borderRadius: '0.5rem'
-                        }}
-                      >
-                        {selectedProductId === p.id ? 'Xác nhận Thêm' : 'Chọn'}
-                      </button>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        {selectedProductId === p.id && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedProductId(null)}
+                            style={{
+                              padding: '0.45rem 0.75rem',
+                              fontSize: '0.82rem',
+                              backgroundColor: '#f1f5f9',
+                              color: '#64748b',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '0.5rem',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Hủy
+                          </button>
+                        )}
+                        <button 
+                          type="button"
+                          className="btn-primary" 
+                          onClick={() => {
+                            if (selectedProductId === p.id) {
+                              onSelect(p, {
+                                ...details,
+                                trackImei: details.trackImei,
+                                quantityPieces: totalPieces,
+                                conversionFactor: 1, 
+                                quantityBoxes: 0,
+                                imeis: details.imeisText ? details.imeisText.split(/[\n,]+/).map(s => s.trim()).filter(Boolean) : [],
+                                serialInput: details.imeisText
+                              });
+                              setSelectedProductId(null);
+                            } else {
+                              setSelectedProductId(p.id);
+                              const defaultPrice = p.importPrice || p.basePrice || 0;
+                              const isImeiProduct = Boolean(
+                                p.hasImei ||
+                                String(p.hasImei) === 'true' ||
+                                (p as any).isImei ||
+                                (p as any).manageImei ||
+                                (p.imeis && p.imeis.length > 0)
+                              );
+                              setDetails({
+                                baseUnitId: p.unitId || '',
+                                unitQuantities: {},
+                                unitCostPrice: defaultPrice,
+                                costPrice: 0,
+                                expiryDate: '',
+                                priceType: 'base',
+                                imeisText: '',
+                                trackImei: isImeiProduct,
+                              });
+                            }
+                          }}
+                          style={{ 
+                            padding: '0.45rem 1rem', 
+                            fontSize: '0.85rem', 
+                            fontWeight: 600,
+                            backgroundColor: selectedProductId === p.id ? '#059669' : '#10b981',
+                            color: 'white',
+                            border: 'none',
+                            cursor: 'pointer',
+                            borderRadius: '0.5rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            boxShadow: selectedProductId === p.id ? '0 2px 4px rgba(5, 150, 105, 0.25)' : 'none',
+                          }}
+                        >
+                          {selectedProductId === p.id ? '✓ Xác nhận Thêm' : 'Chọn'}
+                        </button>
+                      </div>
                     </div>
 
+                    {/* Expanded details form */}
                     {selectedProductId === p.id && (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem', padding: '1rem', backgroundColor: 'white', borderRadius: '0.5rem', border: '1px solid #dcfce7' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-                          <div className="form-group">
-                            <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>Đơn vị lẻ gốc</label>
+                      <div style={{ 
+                        padding: '1.25rem', 
+                        backgroundColor: '#ffffff', 
+                        border: '1px solid #10b981',
+                        borderTop: 'none',
+                        borderRadius: '0 0 0.75rem 0.75rem',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '1rem',
+                        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)',
+                      }}>
+                        {/* Section 1: Units and Quantities */}
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(160px, 1fr))',
+                          gap: '1rem',
+                          padding: '1rem',
+                          backgroundColor: '#f8fafc',
+                          borderRadius: '0.5rem',
+                          border: '1px solid #e2e8f0',
+                        }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                              Đơn vị lẻ gốc
+                            </label>
                             <select 
-                              className="form-control" 
-                              style={{ width: '100%', padding: '0.5rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1' }}
                               value={details.baseUnitId}
                               onChange={(e) => setDetails({...details, baseUnitId: e.target.value})}
+                              style={{
+                                width: '100%',
+                                padding: '0.5rem 0.75rem',
+                                borderRadius: '0.4rem',
+                                border: '1px solid #cbd5e1',
+                                backgroundColor: 'white',
+                                fontSize: '0.85rem',
+                                outline: 'none',
+                              }}
                             >
                               {units.map((u: any) => <option key={u.id} value={u.id}>{u.name}</option>)}
                             </select>
                           </div>
-                        </div>
-                        <div style={{ gridColumn: isMobile ? 'span 1' : 'span 2', display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '0.75rem', border: '1px solid #e2e8f0' }}>
-                          <label style={{ fontSize: '0.875rem', fontWeight: '700', color: '#475569' }}>Số lượng nhập theo đơn vị</label>
-                          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(120px, 1fr))', gap: '1rem' }}>
-                            {/* Always show base unit */}
-                            <div>
-                              <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>{units.find((u: any) => u.id === p.unitId)?.name} (Lẻ)</label>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                              Số lượng ({units.find((u: any) => u.id === p.unitId)?.name || 'Lẻ'})
+                            </label>
+                            <input 
+                              type="number" 
+                              min="0"
+                              value={details.unitQuantities[p.unitId || ''] || ''}
+                              placeholder="0"
+                              onChange={(e) => handleQuantityChange(p.unitId || '', parseFloat(e.target.value) || 0)}
+                              style={{
+                                width: '100%',
+                                padding: '0.5rem 0.75rem',
+                                borderRadius: '0.4rem',
+                                border: '1px solid #cbd5e1',
+                                backgroundColor: 'white',
+                                fontSize: '0.85rem',
+                                fontWeight: 600,
+                                outline: 'none',
+                              }}
+                            />
+                          </div>
+
+                          {p.units?.map((pu: any) => (
+                            <div key={pu.unitId}>
+                              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                                {pu.unit?.name} (x{pu.conversionFactor})
+                              </label>
                               <input 
                                 type="number" 
-                                className="form-control" 
-                                style={{ width: '100%', padding: '0.5rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1' }}
-                                value={details.unitQuantities[p.unitId || ''] || ''}
+                                min="0"
+                                value={details.unitQuantities[pu.unitId] || ''}
                                 placeholder="0"
-                                onChange={(e) => handleQuantityChange(p.unitId || '', parseFloat(e.target.value) || 0)}
+                                onChange={(e) => handleQuantityChange(pu.unitId, parseFloat(e.target.value) || 0)}
+                                style={{
+                                  width: '100%',
+                                  padding: '0.5rem 0.75rem',
+                                  borderRadius: '0.4rem',
+                                  border: '1px solid #cbd5e1',
+                                  backgroundColor: 'white',
+                                  fontSize: '0.85rem',
+                                  outline: 'none',
+                                }}
                               />
                             </div>
-                            {/* Show all conversion units */}
-                            {p.units?.map((pu: any) => (
-                              <div key={pu.unitId}>
-                                <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>{pu.unit?.name}</label>
-                                <input 
-                                  type="number" 
-                                  className="form-control" 
-                                  style={{ width: '100%', padding: '0.5rem', borderRadius: '0.4rem', border: '1px solid #cbd5e1' }}
-                                  value={details.unitQuantities[pu.unitId] || ''}
-                                  placeholder="0"
-                                  onChange={(e) => handleQuantityChange(pu.unitId, parseFloat(e.target.value) || 0)}
-                                />
-                                <div style={{ fontSize: '0.65rem', color: '#94a3b8', marginTop: '0.2rem' }}>x{pu.conversionFactor}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="form-group">
-                          <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748b' }}>Hạn dùng</label>
-                          <input 
-                            type="date" className="form-control" style={{ padding: '0.4rem', border: '1px solid #ef4444', width: '100%', borderRadius: '0.4rem' }}
-                            value={details.expiryDate}
-                            onChange={(e) => setDetails({...details, expiryDate: e.target.value})}
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748b' }}>Giá nhập (1 {baseUnitName})</label>
-                          <input 
-                            type="text" className="form-control" style={{ width: '100%', padding: '0.4rem', borderRadius: '0.4rem', border: '1px solid #10b981', backgroundColor: '#f0fdf4', outline: 'none', fontWeight: '600', color: '#065f46' }}
-                            value={formatNumber(details.unitCostPrice)}
-                            onChange={(e) => handleUnitCostPriceChange(e.target.value)}
-                            placeholder="0"
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#64748b' }}>Thành tiền (Tổng cộng)</label>
-                          <div style={{ display: 'flex' }}>
+                          ))}
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                              Hạn dùng
+                            </label>
                             <input 
-                              type="text" className="form-control" style={{ flex: 1, padding: '0.4rem', borderRadius: '0.4rem', border: '1px solid #e2e8f0', outline: 'none' }}
-                              value={formatNumber(details.costPrice)}
-                              onChange={(e) => handleTotalCostChange(e.target.value)}
-                              placeholder="0"
+                              type="date" 
+                              value={details.expiryDate}
+                              onChange={(e) => setDetails({...details, expiryDate: e.target.value})}
+                              style={{
+                                width: '100%',
+                                padding: '0.45rem 0.75rem',
+                                borderRadius: '0.4rem',
+                                border: '1px solid #cbd5e1',
+                                backgroundColor: 'white',
+                                fontSize: '0.85rem',
+                                outline: 'none',
+                              }}
                             />
                           </div>
                         </div>
+
+                        {/* Section 2: Price and Total */}
+                        <div style={{
+                          display: 'grid',
+                          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                          gap: '1rem',
+                          padding: '1rem',
+                          backgroundColor: '#f8fafc',
+                          borderRadius: '0.5rem',
+                          border: '1px solid #e2e8f0',
+                        }}>
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                              Giá nhập (1 {baseUnitName})
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                              <input 
+                                type="text" 
+                                value={formatNumber(details.unitCostPrice)}
+                                onChange={(e) => handleUnitCostPriceChange(e.target.value)}
+                                placeholder="0"
+                                style={{
+                                  width: '100%',
+                                  padding: '0.5rem 2rem 0.5rem 0.75rem',
+                                  borderRadius: '0.4rem',
+                                  border: '1px solid #cbd5e1',
+                                  backgroundColor: 'white',
+                                  fontSize: '0.9rem',
+                                  fontWeight: 600,
+                                  color: '#0284c7',
+                                  outline: 'none',
+                                }}
+                              />
+                              <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', fontSize: '0.8rem', fontWeight: 600 }}>₫</span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                              Thành tiền (Tổng cộng)
+                            </label>
+                            <div style={{ position: 'relative' }}>
+                              <input 
+                                type="text" 
+                                value={formatNumber(details.costPrice)}
+                                onChange={(e) => handleTotalCostChange(e.target.value)}
+                                placeholder="0"
+                                style={{
+                                  width: '100%',
+                                  padding: '0.5rem 2rem 0.5rem 0.75rem',
+                                  borderRadius: '0.4rem',
+                                  border: '1px solid #10b981',
+                                  backgroundColor: '#ecfdf5',
+                                  fontSize: '0.95rem',
+                                  fontWeight: 700,
+                                  color: '#059669',
+                                  outline: 'none',
+                                }}
+                              />
+                              <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#059669', fontSize: '0.8rem', fontWeight: 700 }}>₫</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Section 3: Serial / IMEI */}
+                        {(details.trackImei || p.hasImei || String(p.hasImei) === 'true' || (p as any).isImei || (p as any).manageImei || (p.imeis && p.imeis.length > 0)) ? (
+                          <div style={{ 
+                            padding: '1rem', 
+                            backgroundColor: '#f0f9ff', 
+                            borderRadius: '0.5rem', 
+                            border: '1px solid #bae6fd' 
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                              <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0369a1' }}>
+                                Danh sách số Serial / IMEI máy
+                              </label>
+                              <span style={{ 
+                                fontSize: '0.75rem', 
+                                fontWeight: 700, 
+                                color: details.imeisText.split(/[\n,]+/).filter(Boolean).length === totalPieces && totalPieces > 0 ? '#059669' : '#d97706',
+                                backgroundColor: details.imeisText.split(/[\n,]+/).filter(Boolean).length === totalPieces && totalPieces > 0 ? '#ecfdf5' : '#fffbeb',
+                                padding: '0.15rem 0.5rem',
+                                borderRadius: '0.375rem',
+                                border: '1px solid currentColor',
+                              }}>
+                                Đã nhập: {details.imeisText.split(/[\n,]+/).filter(Boolean).length} / {totalPieces} mã
+                              </span>
+                            </div>
+                            <textarea
+                              rows={3}
+                              placeholder="Nhập hoặc dán các mã IMEI/Serial (mỗi mã 1 dòng hoặc cách nhau bằng dấu phẩy)..."
+                              style={{ 
+                                width: '100%', 
+                                padding: '0.6rem', 
+                                borderRadius: '0.4rem', 
+                                border: '1px solid #7dd3fc', 
+                                fontSize: '0.85rem', 
+                                fontFamily: 'monospace', 
+                                outline: 'none', 
+                                boxSizing: 'border-box', 
+                                backgroundColor: 'white',
+                                resize: 'vertical',
+                              }}
+                              value={details.imeisText}
+                              onChange={(e) => setDetails({ ...details, imeisText: e.target.value })}
+                            />
+                            <div style={{ fontSize: '0.72rem', color: '#0284c7', marginTop: '0.3rem' }}>
+                              💡 Mỗi IMEI là 1 máy. Bạn có thể quét mã vạch hoặc dán nhiều mã cùng lúc.
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() => setDetails(prev => ({ ...prev, trackImei: true }))}
+                              style={{
+                                fontSize: '0.8rem',
+                                padding: '0.35rem 0.75rem',
+                                borderRadius: '0.375rem',
+                                border: '1px dashed #6366f1',
+                                color: '#4f46e5',
+                                backgroundColor: '#f5f3ff',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                              }}
+                            >
+                              + Quản lý Serial / IMEI cho sản phẩm này
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

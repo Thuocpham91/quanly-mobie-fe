@@ -1,4 +1,4 @@
-﻿import client from './client';
+import client from './client';
 import type { Distributor } from './distributors';
 
 export interface Category {
@@ -111,6 +111,7 @@ export interface ImportOrderItem {
   costPrice?: number;
   lineTotal?: number;
   expiryDate?: string;
+  itemNote?: string;
   isGift?: boolean;
   imeis?: string[];
 }
@@ -169,6 +170,15 @@ export const getProducts = async (context?: any): Promise<Product[]> => {
   const url = `/products?${query.toString()}`;
   const response = await client.get<any>(url);
   return response.data?.data || (Array.isArray(response.data) ? response.data : []);
+};
+
+export const getNextProductCode = async (): Promise<string> => {
+  try {
+    const response = await client.get<any>('/products/next-code');
+    return response.data?.code || '';
+  } catch (error) {
+    return '';
+  }
 };
 
 export const getProductsPaginated = async (page = 1, limit = 10, isService?: boolean, search?: string) => {
@@ -337,6 +347,54 @@ export const getInventoryBatches = async (branchId?: string, page = 1, limit = 1
   return response.data || { data: [], meta: { total: 0, page, limit, totalPages: 1 } };
 };
 
+// Lấy bản đồ giá vốn theo productId từ inventory batches
+// Tính bình quân gia quyền: Σ(costPrice × importedQty) / Σ(importedQty)
+export const getCostPriceMap = async (branchId?: string): Promise<Record<string, number>> => {
+  const BATCH = 500;
+  let page = 1;
+  let allBatches: InventoryBatch[] = [];
+
+  while (true) {
+    const query = new URLSearchParams();
+    if (branchId) query.append('branchId', branchId);
+    query.append('page', String(page));
+    query.append('limit', String(BATCH));
+    const response = await client.get<any>(`/inventory/batches?${query.toString()}`);
+    const raw = response.data;
+    let data: InventoryBatch[] = [];
+    let total = 0;
+
+    if (raw && Array.isArray(raw.data)) {
+      data = raw.data;
+      total = typeof raw.total === 'number' ? raw.total : (raw.meta?.total ?? data.length);
+    } else if (Array.isArray(raw)) {
+      data = raw;
+      total = raw.length;
+    }
+
+    allBatches = allBatches.concat(data);
+    if (data.length < BATCH || allBatches.length >= total) break;
+    page++;
+  }
+
+  // Tính bình quân gia quyền theo productId
+  const costMap: Record<string, { totalCost: number; totalQty: number }> = {};
+  allBatches.forEach((batch) => {
+    const pid = batch.productId;
+    if (!pid || !batch.costPrice) return;
+    if (!costMap[pid]) costMap[pid] = { totalCost: 0, totalQty: 0 };
+    const qty = Number(batch.importedQuantity || 0);
+    costMap[pid].totalCost += Number(batch.costPrice) * qty;
+    costMap[pid].totalQty += qty;
+  });
+
+  const result: Record<string, number> = {};
+  Object.entries(costMap).forEach(([pid, { totalCost, totalQty }]) => {
+    result[pid] = totalQty > 0 ? totalCost / totalQty : 0;
+  });
+  return result;
+};
+
 export const getProductBatches = async (productId: string, branchId?: string) => {
   const query = new URLSearchParams();
   if (branchId) query.append('branchId', branchId);
@@ -493,13 +551,13 @@ export const uploadMultipleFiles = async (files: File[]) => {
 };
 
 // Import Order APIs
-export const getImportOrders = async (branchId?: string, page = 1, limit = 10, distributorId?: string) => {
+export const getImportOrders = async (branchId?: string, page = 1, limit = 10, distributorId?: string, signal?: AbortSignal) => {
   const query = new URLSearchParams();
   if (branchId) query.append('branchId', branchId);
   if (distributorId) query.append('distributorId', distributorId);
   query.append('page', String(page));
   query.append('limit', String(limit));
-  const response = await client.get<any>(`/inventory/import-orders?${query.toString()}`);
+  const response = await client.get<any>(`/inventory/import-orders?${query.toString()}`, { signal, timeout: 15000 });
   return response.data || { data: [], meta: { total: 0, page, limit, totalPages: 1 } };
 };
 
@@ -519,6 +577,7 @@ export const createImportOrder = async (data: {
   discountAmount?: number;
   shippingFee?: number;
   totalAmount?: number;
+  paidAmount?: number;
   items: ImportOrderItem[];
 }): Promise<ImportOrder> => {
   const response = await client.post<ImportOrder>('/inventory/import-orders', data);
@@ -530,7 +589,23 @@ export const updateImportOrder = async (id: string, data: Partial<ImportOrder>):
   return response.data;
 };
 
-export const deleteImportOrder = async (id: string): Promise<void> => {
+export const deleteImportOrder = async (id: string, deleteBatches: boolean = true): Promise<void> => {
+  if (deleteBatches) {
+    try {
+      const order = await getImportOrder(id);
+      if (order && Array.isArray(order.batches) && order.batches.length > 0) {
+        await Promise.all(
+          order.batches.map((batch) =>
+            deleteInventoryBatch(batch.id).catch((err) => {
+              console.warn(`Lỗi khi xóa lô ${batch.id}:`, err);
+            })
+          )
+        );
+      }
+    } catch (e) {
+      console.warn('Không thể tự động xóa lô hàng trước khi xóa phiếu nhập:', e);
+    }
+  }
   await client.delete(`/inventory/import-orders/${id}`);
 };
 

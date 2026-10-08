@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
-import { type Product, getCategories, getItemGroups, getClassifications, getUnits, createCategory, createItemGroup, createClassification, createUnit, uploadMultipleFiles } from '../api/inventory';
+import { type Product, getCategories, getItemGroups, getClassifications, getUnits, createCategory, createItemGroup, createClassification, createUnit, uploadMultipleFiles, getNextProductCode } from '../api/inventory';
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -14,16 +14,25 @@ interface ProductModalProps {
   initialBarcode?: string;
 }
 
+const formatVndInput = (value: number | string | null | undefined): string => {
+  if (value === null || value === undefined || value === '') return '';
+  const digits = String(value).replace(/\D/g, '');
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+};
+
 const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, product, initialBarcode = '' }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [newUrlInput, setNewUrlInput] = useState('');
+  const [suggestedCode, setSuggestedCode] = useState('');
   const [formData, setFormData] = useState<{
     name: string;
     barcode: string;
     productCode: string;
+    importPrice: string;
+    basePrice: string;
     manufacturer: string;
     imageUrl: string;
     imageUrls: string[];
@@ -39,6 +48,8 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
     name: '',
     barcode: '',
     productCode: '',
+    importPrice: '',
+    basePrice: '',
     manufacturer: '',
     imageUrl: '',
     imageUrls: [],
@@ -206,6 +217,8 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
         name: product.name || '',
         barcode: product.barcode || '',
         productCode: product.productCode || '',
+        importPrice: formatVndInput(product.importPrice),
+        basePrice: formatVndInput(product.basePrice ?? product.sellingPrice ?? product.salePrice ?? product.price),
         manufacturer: product.manufacturer || '',
         imageUrl: product.imageUrl || list[0] || '',
         imageUrls: list,
@@ -223,6 +236,8 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
         name: '',
         barcode: initialBarcode,
         productCode: '',
+        importPrice: '',
+        basePrice: '',
         manufacturer: '',
         imageUrl: '',
         imageUrls: [],
@@ -234,6 +249,18 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
         usage: '',
         isService: false,
         hasImei: false,
+      });
+
+      // Fetch auto-generated next product code
+      getNextProductCode().then((code) => {
+        if (code) {
+          setSuggestedCode(code);
+          setFormData((prev) => ({
+            ...prev,
+            productCode: prev.productCode || code,
+            barcode: prev.barcode || initialBarcode || code,
+          }));
+        }
       });
     }
   }, [product, isOpen, initialBarcode]);
@@ -295,6 +322,23 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    const { name, value } = input;
+    const digitsBeforeCursor = value.slice(0, input.selectionStart ?? value.length).replace(/\D/g, '').length;
+    const formattedValue = formatVndInput(value);
+    setFormData((prev) => ({ ...prev, [name]: formattedValue }));
+    requestAnimationFrame(() => {
+      let cursorPosition = 0;
+      let digitsFound = 0;
+      while (cursorPosition < formattedValue.length && digitsFound < digitsBeforeCursor) {
+        if (/\d/.test(formattedValue[cursorPosition])) digitsFound++;
+        cursorPosition++;
+      }
+      input.setSelectionRange(cursorPosition, cursorPosition);
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -303,6 +347,8 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
         name: formData.name,
         barcode: formData.barcode || undefined,
         productCode: formData.productCode || undefined,
+        importPrice: formData.importPrice === '' ? undefined : Math.max(0, Number(formData.importPrice.replace(/,/g, '')) || 0),
+        basePrice: formData.basePrice === '' ? undefined : Math.max(0, Number(formData.basePrice.replace(/,/g, '')) || 0),
         manufacturer: formData.manufacturer || undefined,
         imageUrl: formData.imageUrls?.[0] || formData.imageUrl || undefined,
         imageUrls:
@@ -397,12 +443,44 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
 
             {/* Product Code */}
             <div>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>{t('inventory.label_code')}</label>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>
+                {t('inventory.label_code')} <span style={{ fontSize: '0.75rem', fontWeight: 400, color: '#64748b' }}>(tự sinh nếu để trống)</span>
+              </label>
               <div style={{ position: 'relative' }}>
                 <Tag size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                <input type="text" name="productCode" value={formData.productCode} onChange={handleChange}
-                  style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '0.75rem', border: '1px solid var(--border)', outline: 'none' }} />
+                <input 
+                  type="text" 
+                  name="productCode" 
+                  value={formData.productCode} 
+                  onChange={handleChange}
+                  placeholder={suggestedCode ? `Tự sinh: ${suggestedCode}` : "Mã tự động sinh nếu để trống"}
+                  style={{ width: '100%', padding: '0.75rem 1rem 0.75rem 2.5rem', borderRadius: '0.75rem', border: '1px solid var(--border)', outline: 'none' }} 
+                />
               </div>
+            </div>
+
+            {/* Product Prices */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>Giá nhập (VND)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                name="importPrice"
+                value={formData.importPrice}
+                onChange={handlePriceChange}
+                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border)', outline: 'none' }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', marginBottom: '0.5rem' }}>Giá bán (VND)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                name="basePrice"
+                value={formData.basePrice}
+                onChange={handlePriceChange}
+                style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border)', outline: 'none' }}
+              />
             </div>
 
             {/* Image Upload Section */}

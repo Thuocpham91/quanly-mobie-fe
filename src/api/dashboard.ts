@@ -44,6 +44,6 @@ export const getDashboardStatistics = async (
   if (branchId) {
     params.branchId = branchId;
   }
-  const response = await api.get('/dashboard/statistics', { params, signal });
-  return response.data;
+  const response = await api.get('/dashboard/statistics', { params, signal, timeout: 15000 });
+  return response.data?.data ?? response.data;
 };

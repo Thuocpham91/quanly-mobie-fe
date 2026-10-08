@@ -1,0 +1,10 @@
+﻿node_modules
+dist
+.git
+.github
+*.tar
+*.log
+.env*
+*.xlsx
+.tmp-quanly-mobie-fe-service.tar275635427
+dist.tar.gz

@@ -45,6 +45,7 @@ Write-Host "✅ Docker daemon is running normally." -ForegroundColor Green
 Write-Host "`n[2/6] Reading environment variables from '$EnvFile'..." -ForegroundColor Yellow
 $ViteApiUrl = "https://apimobie.chuyendoisovn.com.vn/api/v1"
 $VirtualHost = "mobie.chuyendoisovn.com.vn"
+$FePort = "3011"
 
 if (Test-Path $EnvFile) {
     Get-Content $EnvFile | ForEach-Object {
@@ -54,6 +55,9 @@ if (Test-Path $EnvFile) {
         }
         if (-not $line.StartsWith("#") -and $line -match "^VIRTUAL_HOST=(.+)$") {
             $VirtualHost = $matches[1].Trim()
+        }
+        if (-not $line.StartsWith("#") -and $line -match "^FE_PORT=(.+)$") {
+            $FePort = $matches[1].Trim()
         }
     }
     Write-Host "   -> VITE_API_URL: $ViteApiUrl" -ForegroundColor Cyan
@@ -82,11 +86,12 @@ Write-Host "✅ Built image '$FullImage' successfully!" -ForegroundColor Green
 # ─────────────────────────────────────────────────────────────
 # STEP 4: Export Docker Image to .tar file
 # ─────────────────────────────────────────────────────────────
-$TarFile = "$ImageName.tar"
+$TarFile = "$ImageName-deploy-$PID.tar"
 Write-Host "`n[4/6] Exporting Docker image to file '$TarFile'..." -ForegroundColor Yellow
 
 if (Test-Path $TarFile) {
-    Remove-Item -Force $TarFile -ErrorAction SilentlyContinue
+    Write-Host "❌ Refusing to overwrite existing archive '$TarFile'." -ForegroundColor Red
+    exit 1
 }
 
 docker save -o $TarFile $FullImage
@@ -104,44 +109,54 @@ Write-Host "✅ Saved '$TarFile' ($TarSizeMB MB)." -ForegroundColor Green
 Write-Host "`n[5/6] Uploading files to server $ServerHost`:$ServerPort..." -ForegroundColor Yellow
 Write-Host "   -> Ensuring directory '$ServerPath' exists on server..." -ForegroundColor Gray
 
-ssh -p $ServerPort -o StrictHostKeyChecking=no "$ServerUser@$ServerHost" "mkdir -p $ServerPath"
+ssh -p $ServerPort -o BatchMode=yes -o StrictHostKeyChecking=yes "$ServerUser@$ServerHost" "mkdir -p $ServerPath"
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "❌ Failed to connect via SSH. Please check IP/Port/Password." -ForegroundColor Red
+    Write-Host "❌ SSH connection or host verification failed." -ForegroundColor Red
     Remove-Item -Force $TarFile -ErrorAction SilentlyContinue
     exit 1
 }
 
-Write-Host "   -> Uploading '$TarFile' (retry up to 3 times if connection drops)..." -ForegroundColor Gray
-$uploadSuccess = $false
-for ($attempt = 1; $attempt -le 3; $attempt++) {
-    if ($attempt -gt 1) {
-        Write-Host "   [Attempt $attempt/3] Retrying upload..." -ForegroundColor Yellow
-        Start-Sleep -Seconds 5
-    }
-    scp -P $ServerPort `
-        -o StrictHostKeyChecking=no `
-        -o ConnectTimeout=60 `
-        -o ServerAliveInterval=30 `
-        -o ServerAliveCountMax=6 `
-        $TarFile "$ServerUser@$ServerHost`:$ServerPath/"
-    if ($LASTEXITCODE -eq 0) {
-        $uploadSuccess = $true
-        break
-    }
-    Write-Host "   ⚠️ Upload attempt $attempt failed." -ForegroundColor Yellow
+$RemoteTarPath = "$ServerPath/$TarFile"
+$RemoteUploadPath = "$RemoteTarPath.upload"
+$LocalTarPath = (Resolve-Path $TarFile).Path
+$RemoteTarget = "$ServerUser@$ServerHost"
+$StreamCommand = 'ssh -p {0} -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=60 -o ServerAliveInterval=30 -o ServerAliveCountMax=6 {1} "cat > {2}" < "{3}"' -f $ServerPort, $RemoteTarget, $RemoteUploadPath, $LocalTarPath
+
+Write-Host "   -> Streaming '$TarFile' over verified SSH..." -ForegroundColor Gray
+& $env:ComSpec /d /s /c $StreamCommand
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ Failed to upload '$TarFile' over SSH." -ForegroundColor Red
+    ssh -p $ServerPort -o BatchMode=yes -o StrictHostKeyChecking=yes $RemoteTarget "rm -f '$RemoteUploadPath'"
+    Remove-Item -Force $TarFile -ErrorAction SilentlyContinue
+    exit 1
 }
-if (-not $uploadSuccess) {
-    Write-Host "❌ Failed to upload '$TarFile' after 3 attempts!" -ForegroundColor Red
+
+$LocalTarSize = (Get-Item $TarFile).Length
+$RemoteVerifyCommand = "test `$(stat -c%s '$RemoteUploadPath') -eq $LocalTarSize && mv '$RemoteUploadPath' '$RemoteTarPath'"
+ssh -p $ServerPort -o BatchMode=yes -o StrictHostKeyChecking=yes $RemoteTarget $RemoteVerifyCommand
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ Uploaded archive size verification failed." -ForegroundColor Red
+    ssh -p $ServerPort -o BatchMode=yes -o StrictHostKeyChecking=yes $RemoteTarget "rm -f '$RemoteUploadPath'"
     Remove-Item -Force $TarFile -ErrorAction SilentlyContinue
     exit 1
 }
 
 Write-Host "   -> Uploading 'docker-compose.yml'..." -ForegroundColor Gray
-scp -P $ServerPort -o StrictHostKeyChecking=no docker-compose.yml "$ServerUser@$ServerHost`:$ServerPath/"
+scp -P $ServerPort -o BatchMode=yes -o StrictHostKeyChecking=yes docker-compose.yml "$RemoteTarget`:$ServerPath/"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ Failed to upload 'docker-compose.yml'." -ForegroundColor Red
+    Remove-Item -Force $TarFile -ErrorAction SilentlyContinue
+    exit 1
+}
 
 if (Test-Path $EnvFile) {
     Write-Host "   -> Uploading '$EnvFile' as '.env'..." -ForegroundColor Gray
-    scp -P $ServerPort -o StrictHostKeyChecking=no $EnvFile "$ServerUser@$ServerHost`:$ServerPath/.env"
+    scp -P $ServerPort -o BatchMode=yes -o StrictHostKeyChecking=yes $EnvFile "$RemoteTarget`:$ServerPath/.env"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "❌ Failed to upload '$EnvFile'." -ForegroundColor Red
+        Remove-Item -Force $TarFile -ErrorAction SilentlyContinue
+        exit 1
+    }
 }
 
 Write-Host "✅ All files uploaded to server successfully!" -ForegroundColor Green
@@ -156,31 +171,34 @@ Write-Host "🧹 Deleted local file '$TarFile'." -ForegroundColor Gray
 Write-Host "`n[6/6] Starting container on server..." -ForegroundColor Yellow
 
 $RemoteCommands = @"
+set -e
 echo '==> 1. Loading Docker image into Docker daemon...'
-docker load -i $ServerPath/$TarFile
-rm -f $ServerPath/$TarFile
+docker load -i '$RemoteTarPath'
+rm -f '$RemoteTarPath'
 
 echo '==> 2. Checking Docker network gasy-network...'
 docker network inspect gasy-network >/dev/null 2>&1 || docker network create gasy-network
 
 echo '==> 3. Restarting service with Docker Compose...'
-cd $ServerPath
-docker compose down 2>/dev/null || true
+cd '$ServerPath'
 docker compose up -d --force-recreate
 
 echo '==> 4. Current container status:'
-docker ps --filter "name=$ContainerName"
+docker compose ps
+docker exec '$ContainerName' wget -q --spider http://127.0.0.1/
+echo 'Container HTTP check passed.'
 "@
 
-ssh -p $ServerPort -o StrictHostKeyChecking=no "$ServerUser@$ServerHost" $RemoteCommands
+ssh -p $ServerPort -o BatchMode=yes -o StrictHostKeyChecking=yes "$ServerUser@$ServerHost" $RemoteCommands
 
 if ($LASTEXITCODE -eq 0) {
+    Remove-Item -Force $TarFile -ErrorAction SilentlyContinue
     Write-Host ""
     Write-Host "==================================================" -ForegroundColor Green
     Write-Host " 🎉 FRONTEND DEPLOYMENT COMPLETED SUCCESSFULLY!" -ForegroundColor Green
     Write-Host "==================================================" -ForegroundColor Green
     Write-Host " 🌐 Domain access : https://$VirtualHost" -ForegroundColor Cyan
-    Write-Host " 🌐 Or Direct IP  : http://$ServerHost`:3011" -ForegroundColor Cyan
+    Write-Host " 🌐 Or Direct IP  : http://$ServerHost`:$FePort" -ForegroundColor Cyan
     Write-Host "==================================================" -ForegroundColor Green
 } else {
     Write-Host "⚠️ There were warnings during server execution. Please check the logs." -ForegroundColor Yellow

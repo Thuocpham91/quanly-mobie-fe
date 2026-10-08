@@ -204,23 +204,20 @@ const SalesPage: React.FC = () => {
   };
 
   const branchPriceByProductId = new Map<string, NonNullable<Product['branchPrices']>[number]>();
+  const salesProductById = new Map<string, Product>();
   productsWithBranchPrices.forEach((product: Product) => {
+    salesProductById.set(product.id, product);
     const branchPrice = product.branchPrices?.find(price => price.branchId === selectedBranchId);
     if (branchPrice) branchPriceByProductId.set(product.id, branchPrice);
   });
 
   const handleAddToCart = (product: Product, currentStock: number) => {
-    if (currentStock <= 0) {
-      alert('Sản phẩm đã hết hàng!');
-      return;
-    }
-
     const price = getProductPrice(product);
     const existingIndex = cart.findIndex(item => item.product.id === product.id);
 
     if (existingIndex > -1) {
       const currentQty = cart[existingIndex].quantity;
-      if (currentQty >= currentStock) {
+      if (currentStock > 0 && currentQty >= currentStock) {
         alert(`Không thể mua thêm. Tồn kho tối đa: ${currentStock}`);
         return;
       }
@@ -450,12 +447,18 @@ const SalesPage: React.FC = () => {
             }}>
               {displayedProducts.map((item: any) => {
                 const inventoryProduct = item.product as Product;
+                const salesProduct = salesProductById.get(inventoryProduct.id);
                 const branchPrice = branchPriceByProductId.get(inventoryProduct.id);
                 const p: Product = {
                   ...inventoryProduct,
+                  importPrice: salesProduct?.importPrice ?? inventoryProduct.importPrice,
+                  sellingPrice: salesProduct?.sellingPrice ?? inventoryProduct.sellingPrice,
+                  salePrice: salesProduct?.salePrice ?? inventoryProduct.salePrice,
+                  price: salesProduct?.price ?? inventoryProduct.price,
+                  basePrice: salesProduct?.basePrice ?? inventoryProduct.basePrice,
                   branchPrices: branchPrice
                     ? [branchPrice]
-                    : inventoryProduct.branchPrices,
+                    : salesProduct?.branchPrices ?? inventoryProduct.branchPrices,
                 };
                 const price = getProductPrice(p);
                 const stock = item.totalStock;
@@ -466,7 +469,7 @@ const SalesPage: React.FC = () => {
                 return (
                   <div
                     key={p.id}
-                    onClick={() => !isOutOfStock && handleAddToCart(p, stock)}
+                    onClick={() => handleAddToCart(p, stock)}
                     style={{
                       backgroundColor: 'white',
                       borderRadius: '0.75rem',
@@ -475,22 +478,20 @@ const SalesPage: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '1rem',
-                      cursor: isOutOfStock ? 'not-allowed' : 'pointer',
-                      opacity: isOutOfStock ? 0.65 : 1,
+                      cursor: 'pointer',
+                      opacity: 1,
                       transition: 'transform 0.15s, box-shadow 0.15s, border-color 0.15s',
                       position: 'relative',
                       userSelect: 'none'
                     }}
                     onMouseEnter={(e) => {
-                      if (!isOutOfStock) {
-                        e.currentTarget.style.transform = 'translateX(4px)';
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.05)';
-                        e.currentTarget.style.borderColor = '#cbd5e1';
-                        const addBtn = e.currentTarget.querySelector('.add-btn') as HTMLElement;
-                        if (addBtn) {
-                          addBtn.style.backgroundColor = '#6366f1';
-                          addBtn.style.color = '#ffffff';
-                        }
+                      e.currentTarget.style.transform = 'translateX(4px)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.05)';
+                      e.currentTarget.style.borderColor = '#cbd5e1';
+                      const addBtn = e.currentTarget.querySelector('.add-btn') as HTMLElement;
+                      if (addBtn) {
+                        addBtn.style.backgroundColor = '#6366f1';
+                        addBtn.style.color = '#ffffff';
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -602,8 +603,8 @@ const SalesPage: React.FC = () => {
                         width: '32px',
                         height: '32px',
                         borderRadius: '50%',
-                        backgroundColor: isOutOfStock ? '#f1f5f9' : '#e0e7ff',
-                        color: isOutOfStock ? '#94a3b8' : '#6366f1',
+                        backgroundColor: '#e0e7ff',
+                        color: '#6366f1',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',

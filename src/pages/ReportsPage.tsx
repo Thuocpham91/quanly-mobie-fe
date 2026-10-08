@@ -22,7 +22,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { useBranchContext } from '../context/BranchContext';
-import { getOrders, type Order, type OrderItem } from '../api/orders';
+import { getOrdersForReport, type Order, type OrderItem } from '../api/orders';
 import { getInventorySummary, getProducts, type Product } from '../api/inventory';
 import branchesApi from '../api/branches';
 import { formatDate } from '../utils/format';
@@ -30,6 +30,9 @@ import * as XLSX from 'xlsx';
 
 type InterestType = 'profit_invoice' | 'by_date' | 'discount' | 'by_staff' | 'inventory';
 type TimeFilterOption = 'today' | 'this_week' | 'this_month' | 'last_month' | 'custom';
+
+const formatReportMoney = (value: number) =>
+  new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 }).format(value);
 
 const ReportsPage: React.FC = () => {
   const { selectedBranchId } = useBranchContext();
@@ -91,12 +94,12 @@ const ReportsPage: React.FC = () => {
     }
   };
 
-  // Fetch Orders & Inventory Data
-  const { data: ordersData, isLoading: loadingOrders } = useQuery({
-    queryKey: ['reportsOrdersAll'],
-    queryFn: () => getOrders(1, 1000),
+  // Fetch Orders & Inventory Data — reactive theo date range và branch
+  const { data: allOrders = [], isLoading: loadingOrders } = useQuery<Order[]>({
+    queryKey: ['reportsOrders', fromDate, toDate, selectedBranchId],
+    queryFn: () => getOrdersForReport(fromDate, toDate, selectedBranchId || undefined),
+    enabled: !!fromDate && !!toDate,
   });
-  const allOrders: Order[] = ordersData?.data || [];
 
   const { data: inventorySummary = [] } = useQuery({
     queryKey: ['reportsInventorySummary', selectedBranchId],
@@ -108,34 +111,33 @@ const ReportsPage: React.FC = () => {
     queryFn: () => getProducts(),
   });
 
-  // Cost Map
+  // Cost Map: ưu tiên bình quân giá nhập từ lô hàng, sau đó đến importPrice.
   const productCostMap = useMemo(() => {
     const map: Record<string, number> = {};
+
+    // Bước 1: Lấy giá nhập nhà cung cấp từ sản phẩm.
     allProducts.forEach((p: Product) => {
-      map[p.id] = p.basePrice || 0;
+      const cost = Number(p.importPrice || 0);
+      if (cost > 0) map[p.id] = cost;
     });
+
+    // Bước 2: Ghi đè bằng averageCost từ inventorySummary nếu có (chính xác hơn)
     inventorySummary.forEach((item: any) => {
-      if (item.product?.id) {
-        map[item.product.id] = item.averageCost || item.product.basePrice || map[item.product.id] || 0;
-      }
+      const pid = item.product?.id || item.productId;
+      if (!pid) return;
+      const avgCost = Number(item.averageCost || 0);
+      const fallback = Number(item.product?.importPrice || 0);
+      const cost = avgCost > 0 ? avgCost : fallback;
+      if (cost > 0) map[pid] = cost;
     });
+
     return map;
   }, [allProducts, inventorySummary]);
 
-  // Filter orders by Date Range, Branch, and Search Term
+  // Filter theo search term (date/branch đã filter ở server)
   const filteredOrders = useMemo(() => {
-    const start = new Date(`${fromDate}T00:00:00`);
-    const end = new Date(`${toDate}T23:59:59`);
-
     return allOrders.filter((order) => {
       if (!order.createdAt) return false;
-      const orderDate = new Date(order.createdAt);
-      if (orderDate < start || orderDate > end) return false;
-
-      if (selectedBranchId && order.branchId && order.branchId !== selectedBranchId) {
-        return false;
-      }
-
       if (order.status === 'CANCELLED') return false;
 
       const q = searchTerm.toLowerCase().trim();
@@ -147,19 +149,36 @@ const ReportsPage: React.FC = () => {
 
       return true;
     });
-  }, [allOrders, fromDate, toDate, selectedBranchId, searchTerm]);
+  }, [allOrders, searchTerm]);
 
   // Process Orders with Cost & Profit Calculations
   const processedOrders = useMemo(() => {
     return filteredOrders.map((order) => {
       const discount = Number(order.discount || 0);
-      const totalAmount = Number(order.totalAmount || 0);
-      const subTotal = order.subTotal || totalAmount + discount;
+      const itemSubTotal = (order.items || []).reduce(
+        (sum, item) => sum + Number(item.unitPrice || 0) * Number(item.quantity || 1),
+        0,
+      );
+      const hasItemTotals = (order.items || []).length > 0 && itemSubTotal > 0;
+      const apiTotalAmount = Number(order.totalAmount || 0);
+      const subTotal = hasItemTotals
+        ? itemSubTotal
+        : order.subTotal != null
+          ? Number(order.subTotal)
+          : apiTotalAmount + discount;
+      const totalAmount = hasItemTotals
+        ? Math.max(0, subTotal - discount)
+        : apiTotalAmount;
 
       let costTotal = 0;
       (order.items || []).forEach((item: OrderItem) => {
-        const unitCost = productCostMap[item.productId] || item.product?.basePrice || 0;
-        costTotal += unitCost * (item.quantity || 1);
+        // Ưu tiên: giá vốn từ map > basePrice của sản phẩm trong order item
+        const mappedCost = productCostMap[item.productId];
+        const itemBaseCost = Number(item.product?.importPrice || item.product?.basePrice || 0);
+        const unitCost = mappedCost != null && mappedCost > 0
+          ? mappedCost
+          : (itemBaseCost > 0 ? itemBaseCost : 0);
+        costTotal += unitCost * Number(item.quantity || 1);
       });
 
       const profit = totalAmount - costTotal;
@@ -207,11 +226,11 @@ const ReportsPage: React.FC = () => {
       }
 
       groups[dateKey].orders.push(order);
-      groups[dateKey].subTotalSum += order.subTotal;
-      groups[dateKey].discountSum += order.discount;
-      groups[dateKey].totalAmountSum += order.totalAmount;
-      groups[dateKey].costTotalSum += order.costTotal;
-      groups[dateKey].profitSum += order.profit;
+      groups[dateKey].subTotalSum += Number(order.subTotal);
+      groups[dateKey].discountSum += Number(order.discount);
+      groups[dateKey].totalAmountSum += Number(order.totalAmount);
+      groups[dateKey].costTotalSum += Number(order.costTotal);
+      groups[dateKey].profitSum += Number(order.profit);
     });
 
     // Sort dates descending
@@ -456,41 +475,49 @@ const ReportsPage: React.FC = () => {
 
         {/* Main Report Data Table */}
         <div style={{ flex: 1, backgroundColor: 'white', border: '1px solid #cbd5e1', borderRadius: '0.5rem', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflow: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '900px' }}>
+          <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed', minWidth: '960px' }}>
+              <colgroup>
+                <col style={{ width: '280px' }} />
+                <col style={{ width: '140px' }} />
+                <col style={{ width: '120px' }} />
+                <col style={{ width: '150px' }} />
+                <col style={{ width: '140px' }} />
+                <col style={{ width: '140px' }} />
+              </colgroup>
               
               {/* Header */}
               <thead style={{ backgroundColor: '#0284c7', color: 'white', position: 'sticky', top: 0, zIndex: 10 }}>
                 <tr>
-                  <th style={{ padding: '0.75rem 1rem', fontWeight: '700', fontSize: '0.85rem', width: '260px' }}>Thời gian</th>
-                  <th style={{ padding: '0.75rem 1rem', fontWeight: '700', fontSize: '0.85rem', textAlign: 'right' }}>Tổng tiền hàng</th>
-                  <th style={{ padding: '0.75rem 1rem', fontWeight: '700', fontSize: '0.85rem', textAlign: 'right' }}>Giảm giá HĐ</th>
-                  <th style={{ padding: '0.75rem 1rem', fontWeight: '700', fontSize: '0.85rem', textAlign: 'right' }}>Doanh thu</th>
-                  <th style={{ padding: '0.75rem 1rem', fontWeight: '700', fontSize: '0.85rem', textAlign: 'right' }}>Tổng giá vốn</th>
-                  <th style={{ padding: '0.75rem 1rem', fontWeight: '700', fontSize: '0.85rem', textAlign: 'right' }}>Lợi nhuận gộp</th>
+                  <th style={{ padding: '0.75rem 1rem', fontWeight: '700', fontSize: '0.85rem', textAlign: 'left' }}>Thời gian</th>
+                  <th style={{ padding: '0.75rem 1rem', fontWeight: '700', fontSize: '0.85rem', textAlign: 'right', whiteSpace: 'nowrap' }}>Tổng tiền hàng</th>
+                  <th style={{ padding: '0.75rem 1rem', fontWeight: '700', fontSize: '0.85rem', textAlign: 'right', whiteSpace: 'nowrap' }}>Giảm giá HĐ</th>
+                  <th style={{ padding: '0.75rem 1rem', fontWeight: '700', fontSize: '0.85rem', textAlign: 'right', whiteSpace: 'nowrap' }}>Doanh thu</th>
+                  <th style={{ padding: '0.75rem 1rem', fontWeight: '700', fontSize: '0.85rem', textAlign: 'right', whiteSpace: 'nowrap' }}>Tổng giá vốn</th>
+                  <th style={{ padding: '0.75rem 1rem', fontWeight: '700', fontSize: '0.85rem', textAlign: 'right', whiteSpace: 'nowrap' }}>Lợi nhuận gộp</th>
                 </tr>
               </thead>
 
               <tbody>
                 {/* Yellow Highlighted Summary Row for Selected Range */}
                 <tr style={{ backgroundColor: '#fef9c3', borderBottom: '2px solid #fde047', fontWeight: '700' }}>
-                  <td style={{ padding: '0.75rem 1rem', color: '#1e293b', fontSize: '0.9rem' }}>
+                  <td style={{ padding: '0.75rem 1rem', color: '#1e293b', fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     TỔNG CỘNG ({dateGroups.length} ngày)
                   </td>
-                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#1e293b', fontSize: '0.9rem' }}>
-                    {grandTotalSummary.subTotal.toLocaleString('vi-VN')}
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#1e293b', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+                    {formatReportMoney(grandTotalSummary.subTotal)}
                   </td>
-                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#dc2626', fontSize: '0.9rem' }}>
-                    {-grandTotalSummary.discount !== 0 ? (-grandTotalSummary.discount).toLocaleString('vi-VN') : '0'}
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#dc2626', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+                    {grandTotalSummary.discount !== 0 ? formatReportMoney(-grandTotalSummary.discount) : '0'}
                   </td>
-                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#1e293b', fontSize: '0.9rem' }}>
-                    {grandTotalSummary.totalAmount.toLocaleString('vi-VN')}
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#1e293b', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+                    {formatReportMoney(grandTotalSummary.totalAmount)}
                   </td>
-                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#b45309', fontSize: '0.9rem' }}>
-                    {grandTotalSummary.costTotal.toLocaleString('vi-VN')}
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: '#b45309', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+                    {formatReportMoney(grandTotalSummary.costTotal)}
                   </td>
-                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: grandTotalSummary.profit >= 0 ? '#047857' : '#dc2626', fontSize: '0.95rem' }}>
-                    {grandTotalSummary.profit.toLocaleString('vi-VN')}
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right', color: grandTotalSummary.profit >= 0 ? '#047857' : '#dc2626', fontSize: '0.95rem', whiteSpace: 'nowrap' }}>
+                    {formatReportMoney(grandTotalSummary.profit)}
                   </td>
                 </tr>
 
@@ -520,34 +547,34 @@ const ReportsPage: React.FC = () => {
                             fontWeight: '600',
                           }}
                         >
-                          <td style={{ padding: '0.65rem 1rem' }}>
+                          <td style={{ padding: '0.65rem 1rem', overflow: 'hidden' }}>
                             <div
                               onClick={() => toggleExpandDate(group.dateStr)}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', color: '#0369a1', fontSize: '0.85rem' }}
+                              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', color: '#0369a1', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
                             >
-                              <span style={{ fontSize: '0.9rem', width: '16px', textAlign: 'center', fontWeight: 'bold' }}>
+                              <span style={{ fontSize: '0.9rem', width: '16px', textAlign: 'center', fontWeight: 'bold', flexShrink: 0 }}>
                                 {isExpanded ? '−' : '+'}
                               </span>
-                              <span>{group.formattedDate}</span>
-                              <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500 }}>
+                              <span style={{ flexShrink: 0 }}>{group.formattedDate}</span>
+                              <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 500, flexShrink: 0 }}>
                                 ({group.orders.length} HĐ)
                               </span>
                             </div>
                           </td>
-                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontSize: '0.85rem', color: '#334155' }}>
-                            {group.subTotalSum.toLocaleString('vi-VN')}
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontSize: '0.85rem', color: '#334155', whiteSpace: 'nowrap' }}>
+                            {formatReportMoney(group.subTotalSum)}
                           </td>
-                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontSize: '0.85rem', color: '#dc2626' }}>
-                            {-group.discountSum !== 0 ? (-group.discountSum).toLocaleString('vi-VN') : '0'}
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontSize: '0.85rem', color: '#dc2626', whiteSpace: 'nowrap' }}>
+                            {group.discountSum !== 0 ? formatReportMoney(-group.discountSum) : '0'}
                           </td>
-                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontSize: '0.85rem', color: '#1e293b', fontWeight: 700 }}>
-                            {group.totalAmountSum.toLocaleString('vi-VN')}
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontSize: '0.85rem', color: '#1e293b', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {formatReportMoney(group.totalAmountSum)}
                           </td>
-                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontSize: '0.85rem', color: '#b45309' }}>
-                            {group.costTotalSum.toLocaleString('vi-VN')}
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontSize: '0.85rem', color: '#b45309', whiteSpace: 'nowrap' }}>
+                            {formatReportMoney(group.costTotalSum)}
                           </td>
-                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontSize: '0.85rem', fontWeight: 700, color: group.profitSum >= 0 ? '#047857' : '#dc2626' }}>
-                            {group.profitSum.toLocaleString('vi-VN')}
+                          <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontSize: '0.85rem', fontWeight: 700, color: group.profitSum >= 0 ? '#047857' : '#dc2626', whiteSpace: 'nowrap' }}>
+                            {formatReportMoney(group.profitSum)}
                           </td>
                         </tr>
 
@@ -562,37 +589,37 @@ const ReportsPage: React.FC = () => {
                                 fontSize: '0.8rem',
                               }}
                             >
-                              <td style={{ padding: '0.5rem 1rem 0.5rem 2.5rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <td style={{ padding: '0.45rem 1rem 0.45rem 2.5rem', overflow: 'hidden' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap', overflow: 'hidden' }}>
                                   <span
                                     onClick={() => setSelectedOrder(o)}
-                                    style={{ fontWeight: '700', color: '#2563eb', cursor: 'pointer', textDecoration: 'underline' }}
+                                    style={{ fontWeight: '700', color: '#2563eb', cursor: 'pointer', textDecoration: 'underline', flexShrink: 0 }}
                                     title="Click xem chi tiết đơn hàng"
                                   >
                                     {o.orderCode}
                                   </span>
-                                  <span style={{ color: '#64748b', fontSize: '0.75rem' }}>
-                                    ({new Date(o.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })})
+                                  <span style={{ color: '#94a3b8', fontSize: '0.72rem', flexShrink: 0 }}>
+                                    {new Date(o.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                                   </span>
-                                  <span style={{ color: '#475569', fontSize: '0.75rem', fontWeight: 500 }}>
+                                  <span style={{ color: '#475569', fontSize: '0.75rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {o.customer?.fullName || 'Khách vãng lai'}
                                   </span>
                                 </div>
                               </td>
-                              <td style={{ padding: '0.5rem 1rem', textAlign: 'right', color: '#64748b' }}>
-                                {o.subTotal.toLocaleString('vi-VN')}
+                              <td style={{ padding: '0.45rem 1rem', textAlign: 'right', color: '#64748b', whiteSpace: 'nowrap' }}>
+                                {formatReportMoney(o.subTotal)}
                               </td>
-                              <td style={{ padding: '0.5rem 1rem', textAlign: 'right', color: '#dc2626' }}>
-                                {-o.discount !== 0 ? (-o.discount).toLocaleString('vi-VN') : '0'}
+                              <td style={{ padding: '0.45rem 1rem', textAlign: 'right', color: '#dc2626', whiteSpace: 'nowrap' }}>
+                                {o.discount !== 0 ? formatReportMoney(-o.discount) : '0'}
                               </td>
-                              <td style={{ padding: '0.5rem 1rem', textAlign: 'right', color: '#1e293b', fontWeight: '600' }}>
-                                {o.totalAmount.toLocaleString('vi-VN')}
+                              <td style={{ padding: '0.45rem 1rem', textAlign: 'right', color: '#1e293b', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                                {formatReportMoney(o.totalAmount)}
                               </td>
-                              <td style={{ padding: '0.5rem 1rem', textAlign: 'right', color: '#d97706' }}>
-                                {o.costTotal.toLocaleString('vi-VN')}
+                              <td style={{ padding: '0.45rem 1rem', textAlign: 'right', color: '#d97706', whiteSpace: 'nowrap' }}>
+                                {formatReportMoney(o.costTotal)}
                               </td>
-                              <td style={{ padding: '0.5rem 1rem', textAlign: 'right', fontWeight: '700', color: o.profit >= 0 ? '#059669' : '#dc2626' }}>
-                                {o.profit.toLocaleString('vi-VN')}
+                              <td style={{ padding: '0.45rem 1rem', textAlign: 'right', fontWeight: '700', color: o.profit >= 0 ? '#059669' : '#dc2626', whiteSpace: 'nowrap' }}>
+                                {formatReportMoney(o.profit)}
                               </td>
                             </tr>
                           ))}
@@ -609,7 +636,7 @@ const ReportsPage: React.FC = () => {
       {/* Invoice Detail Breakdown Modal */}
       {selectedOrder && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '1rem' }}>
-          <div style={{ backgroundColor: 'white', borderRadius: '0.75rem', width: '100%', maxWidth: '750px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '0.75rem', width: '100%', maxWidth: '850px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
             
             {/* Header */}
             <div style={{ padding: '1.1rem 1.5rem', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -653,10 +680,12 @@ const ReportsPage: React.FC = () => {
                 <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#334155', marginBottom: '0.4rem' }}>
                   Danh sách sản phẩm trong hóa đơn:
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #e2e8f0', borderRadius: '0.375rem', overflow: 'hidden' }}>
+                <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', minWidth: '760px', borderCollapse: 'collapse', border: '1px solid #e2e8f0', borderRadius: '0.375rem', overflow: 'hidden' }}>
                   <thead style={{ backgroundColor: '#0284c7', color: 'white' }}>
                     <tr>
                       <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>STT</th>
+                      <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>Mã đơn hàng</th>
                       <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>Mặt hàng</th>
                       <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.78rem', fontWeight: 700, textAlign: 'center' }}>SL</th>
                       <th style={{ padding: '0.55rem 0.75rem', fontSize: '0.78rem', fontWeight: 700, textAlign: 'right' }}>Giá bán (₫)</th>
@@ -668,63 +697,68 @@ const ReportsPage: React.FC = () => {
                     {(selectedOrder.items || []).map((item, idx) => {
                       const qty = item.quantity || 1;
                       const sellTotal = (item.unitPrice || 0) * qty;
-                      const unitCost = productCostMap[item.productId] || item.product?.basePrice || 0;
+                      const unitCost = productCostMap[item.productId] || item.product?.importPrice || 0;
                       const costTotal = unitCost * qty;
                       const profit = sellTotal - costTotal;
 
                       return (
                         <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? 'white' : '#fafafa' }}>
                           <td style={{ padding: '0.55rem 0.75rem', fontSize: '0.8rem', color: '#64748b' }}>{idx + 1}</td>
+                          <td style={{ padding: '0.55rem 0.75rem', fontSize: '0.8rem', fontWeight: 600, color: '#2563eb', whiteSpace: 'nowrap' }}>
+                            {selectedOrder.orderCode}
+                          </td>
                           <td style={{ padding: '0.55rem 0.75rem', fontSize: '0.85rem', fontWeight: 600, color: '#1e293b' }}>
                             {item.product?.name || 'Sản phẩm ID: ' + item.productId}
                           </td>
                           <td style={{ padding: '0.55rem 0.75rem', fontSize: '0.85rem', textAlign: 'center', fontWeight: 600 }}>{qty}</td>
-                          <td style={{ padding: '0.55rem 0.75rem', fontSize: '0.85rem', textAlign: 'right', fontWeight: 600 }}>{sellTotal.toLocaleString('vi-VN')}</td>
-                          <td style={{ padding: '0.55rem 0.75rem', fontSize: '0.85rem', textAlign: 'right', color: '#b45309' }}>{costTotal.toLocaleString('vi-VN')}</td>
+                          <td style={{ padding: '0.55rem 0.75rem', fontSize: '0.85rem', textAlign: 'right', fontWeight: 600 }}>{formatReportMoney(sellTotal)}</td>
+                          <td style={{ padding: '0.55rem 0.75rem', fontSize: '0.85rem', textAlign: 'right', color: '#b45309' }}>{formatReportMoney(costTotal)}</td>
                           <td style={{ padding: '0.55rem 0.75rem', fontSize: '0.85rem', textAlign: 'right', fontWeight: 700, color: profit >= 0 ? '#059669' : '#dc2626' }}>
-                            {profit.toLocaleString('vi-VN')}
+                            {formatReportMoney(profit)}
                           </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
 
               {/* Order Financial Summary Box */}
               <div style={{ backgroundColor: '#fef9c3', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #fde047', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                   <span>Tổng tiền hàng:</span>
-                  <span>{(selectedOrder.subTotal || (selectedOrder.totalAmount + (selectedOrder.discount || 0))).toLocaleString('vi-VN')} ₫</span>
+                  <span>{formatReportMoney(selectedOrder.subTotal || (selectedOrder.totalAmount + (selectedOrder.discount || 0)))} ₫</span>
                 </div>
                 {selectedOrder.discount > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#dc2626' }}>
                     <span>Giảm giá HĐ:</span>
-                    <span>-{(selectedOrder.discount).toLocaleString('vi-VN')} ₫</span>
+                    <span>-{formatReportMoney(selectedOrder.discount)} ₫</span>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', fontWeight: 700 }}>
                   <span>Doanh thu thực tế:</span>
-                  <span>{(selectedOrder.totalAmount || 0).toLocaleString('vi-VN')} ₫</span>
+                  <span>{formatReportMoney(selectedOrder.totalAmount || 0)} ₫</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#b45309' }}>
                   <span>Tổng giá vốn:</span>
                   <span>
-                    {(selectedOrder.items || [])
-                      .reduce((s, item) => s + (productCostMap[item.productId] || item.product?.basePrice || 0) * (item.quantity || 1), 0)
-                      .toLocaleString('vi-VN')} ₫
+                    {formatReportMoney((selectedOrder.items || []).reduce(
+                      (sum, item) => sum + (productCostMap[item.productId] || item.product?.importPrice || 0) * (item.quantity || 1),
+                      0,
+                    ))} ₫
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 800, color: '#047857', borderTop: '1px solid #facc15', paddingTop: '0.4rem', marginTop: '0.2rem' }}>
                   <span>LỢI NHUẬN GỘP HÓA ĐƠN:</span>
                   <span>
-                    {(
+                    {formatReportMoney(
                       Number(selectedOrder.totalAmount || 0) -
                       (selectedOrder.items || []).reduce(
-                        (s, item) => s + (productCostMap[item.productId] || item.product?.basePrice || 0) * (item.quantity || 1),
+                        (s, item) => s + (productCostMap[item.productId] || item.product?.importPrice || 0) * (item.quantity || 1),
                         0
                       )
-                    ).toLocaleString('vi-VN')} ₫
+                    )} ₫
                   </span>
                 </div>
               </div>

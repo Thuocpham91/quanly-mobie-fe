@@ -115,6 +115,63 @@ export const getOrders = async (
   return raw;
 };
 
+// Chuyên dùng cho báo cáo: filter theo ngày, chi nhánh, fetch nhiều trang
+export const getOrdersForReport = async (
+  startDate: string,
+  endDate: string,
+  branchId?: string,
+): Promise<Order[]> => {
+  const BATCH = 500;
+  let page = 1;
+  let allOrders: Order[] = [];
+
+  while (true) {
+    const params: any = {
+      page,
+      limit: BATCH,
+      status: 'COMPLETED',
+      startDate,
+      endDate,
+      includeItems: true,
+    };
+    if (branchId) params.branchId = branchId;
+
+    const response = await api.get('/orders', { params });
+    const raw = response.data;
+
+    let data: Order[] = [];
+    let total = 0;
+
+    if (raw && Array.isArray(raw.data)) {
+      data = raw.data;
+      total = typeof raw.total === 'number' ? raw.total : (raw.meta?.total ?? data.length);
+    } else if (Array.isArray(raw)) {
+      data = raw;
+      total = raw.length;
+    }
+
+    allOrders = allOrders.concat(data);
+
+    // Dừng nếu đã lấy hết hoặc trang hiện tại không đủ BATCH
+    if (data.length < BATCH || allOrders.length >= total) break;
+    page++;
+  }
+
+  // Client-side fallback filter theo ngày (đề phòng server không hỗ trợ startDate/endDate)
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T23:59:59`);
+  const filtered = allOrders.filter((order) => {
+    if (!order.createdAt) return false;
+    const orderDate = new Date(order.createdAt);
+    if (orderDate < start || orderDate > end) return false;
+    if (branchId && order.branchId && order.branchId !== branchId) return false;
+    if (order.status === 'CANCELLED') return false;
+    return true;
+  });
+
+  return filtered;
+};
+
 export const getOrderById = async (id: string): Promise<Order> => {
   const response = await api.get(`/orders/${id}`);
   return response.data;

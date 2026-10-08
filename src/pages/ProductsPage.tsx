@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Search, Plus, Edit2, Trash2, Box, Layers, Tag, Ruler, SlidersHorizontal, FileSpreadsheet, Eye } from 'lucide-react';
+import { formatNumber } from '../utils/format';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
@@ -336,6 +337,8 @@ const ProductsPage: React.FC = () => {
                   <th style={{ padding: '1rem' }}>Tên sản phẩm</th>
                   <th style={{ padding: '1rem' }}>Mã vạch</th>
                   <th style={{ padding: '1rem' }}>Mã hàng hóa</th>
+                  <th style={{ padding: '1rem', textAlign: 'right', minWidth: '110px' }}>Giá nhập</th>
+                  <th style={{ padding: '1rem', textAlign: 'right', minWidth: '110px' }}>Giá bán</th>
                   <th style={{ padding: '1rem', textAlign: 'center' }}>Tổng số</th>
                   <th style={{ padding: '1rem' }}>Trạng thái</th>
                   <th style={{ padding: '1rem', textAlign: 'center' }}>Tồn kho</th>
@@ -355,14 +358,14 @@ const ProductsPage: React.FC = () => {
           <tbody>
             {loadingProducts ? (
               <tr>
-                <td colSpan={activeTab === 'products' ? 11 : 4} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+                <td colSpan={activeTab === 'products' ? 13 : 4} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
                   {t('products.loading')}
                 </td>
               </tr>
             ) : activeTab === 'products' ? (
               filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={11} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan={13} style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
                     {t('products.no_products')}
                   </td>
                 </tr>
@@ -405,6 +408,12 @@ const ProductsPage: React.FC = () => {
                       </td>
                       <td style={{ padding: '1rem', color: '#64748b', fontSize: '0.85rem' }}>{p.barcode || '--'}</td>
                       <td style={{ padding: '1rem', fontWeight: '600', color: '#1e293b' }}>{p.productCode || '--'}</td>
+                      <td style={{ padding: '1rem', textAlign: 'right', color: '#0891b2', fontWeight: 600, fontSize: '0.85rem' }}>
+                        {p.importPrice ? formatNumber(p.importPrice) + ' ₫' : <span style={{ color: '#94a3b8' }}>--</span>}
+                      </td>
+                      <td style={{ padding: '1rem', textAlign: 'right', color: '#059669', fontWeight: 600, fontSize: '0.85rem' }}>
+                        {p.basePrice ? formatNumber(p.basePrice) + ' ₫' : <span style={{ color: '#94a3b8' }}>--</span>}
+                      </td>
                       <td style={{ padding: '1rem', textAlign: 'center', color: '#1e293b', fontWeight: 500 }}>{Number(p.quantity ?? 0)}</td>
                       <td style={{ padding: '1rem' }}>
                         {p.status ? (

@@ -9,6 +9,7 @@ import {
   getClassifications, createClassification, updateClassification, deleteClassification,
   getUnits, createUnit, updateUnit, deleteUnit
 } from '../api/inventory';
+import { cacheQRBase64 } from '../utils/offlineStorage';
 
 const SettingsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -285,6 +286,7 @@ const SettingsPage: React.FC = () => {
                 localStorage.setItem('qr_account', qrAccount.trim());
                 localStorage.setItem('qr_name', qrName.trim().toUpperCase());
                 localStorage.setItem('qr_memo', qrMemo.trim());
+                cacheQRBase64(qrBank, qrAccount.trim(), qrName.trim().toUpperCase(), qrMemo.trim());
                 alert(t('settings.qr_success'));
               }}
               style={{

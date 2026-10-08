@@ -16,13 +16,30 @@ import {
   Menu,
   ChevronDown,
   Navigation,
-  Loader2
+  Loader2,
+  QrCode,
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Database,
+  CloudOff
 } from 'lucide-react';
 import { searchCustomers, createCustomer, type Customer } from '../api/customers';
 import { getUsers } from '../api/users';
 import { createOrder, type CreateOrderPayload } from '../api/orders';
 import LocationSelector from '../components/LocationSelector';
 import type { LocationItem } from '../api/locations';
+import { 
+  saveOfflineOrder, 
+  getOfflinePendingOrders, 
+  removeOfflineOrder, 
+  saveFormDraft, 
+  getFormDraft, 
+  clearFormDraft, 
+  getLocalQRCache,
+  cacheQRBase64,
+  type CachedFormData 
+} from '../utils/offlineStorage';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
@@ -128,6 +145,128 @@ const POSPage: React.FC = () => {
   
   // Location selector modal state
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+
+  // --- Offline & Cache Local States ---
+  const [isOnline, setIsOnline] = useState<boolean>(() => navigator.onLine);
+  const [offlineOrders, setOfflineOrders] = useState<CachedFormData[]>(() => getOfflinePendingOrders());
+  const [showOfflineModal, setShowOfflineModal] = useState<boolean>(false);
+  const [isSyncingOffline, setIsSyncingOffline] = useState<boolean>(false);
+  const [showQRModal, setShowQRModal] = useState<boolean>(false);
+  const [localQR, setLocalQR] = useState(() => getLocalQRCache());
+  const [saveStatusMessage, setSaveStatusMessage] = useState<string>('');
+
+  // Lắng nghe trạng thái mạng Online / Offline
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Auto cache QR preview
+      const qr = getLocalQRCache();
+      cacheQRBase64(qr.bank, qr.account, qr.accountName, qr.memo);
+    };
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial cache QR
+    const qr = getLocalQRCache();
+    if (navigator.onLine && qr.account) {
+      cacheQRBase64(qr.bank, qr.account, qr.accountName, qr.memo);
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Đọc lại danh sách cache khi mở lại hoặc thay đổi
+  const reloadOfflineList = () => {
+    setOfflineOrders(getOfflinePendingOrders());
+  };
+
+  // Khôi phục form nháp dở dang từ LocalStorage nếu có
+  useEffect(() => {
+    const draft = getFormDraft();
+    if (draft && draft.formId) {
+      if (draft.appointmentDate) setAppointmentDate(draft.appointmentDate);
+      if (draft.appointmentTime) setAppointmentTime(draft.appointmentTime);
+      if (draft.deadline) setDeadline(draft.deadline);
+      if (draft.customerName) setCustomerName(draft.customerName);
+      if (draft.customerPhone) setCustomerPhone(draft.customerPhone);
+      if (draft.address) setAddress(draft.address);
+      if (draft.customerLocation) setCustomerLocation(draft.customerLocation);
+      if (draft.jobDescription) setJobDescription(draft.jobDescription);
+      if (draft.completedItems) setCompletedItems(draft.completedItems);
+      if (draft.quotedAmount !== undefined) setQuotedAmount(draft.quotedAmount);
+      if (draft.discount !== undefined) setDiscount(draft.discount);
+      if (draft.paidAmount !== undefined) setPaidAmount(draft.paidAmount);
+      if (draft.costPrice !== undefined) setCostPrice(draft.costPrice);
+      if (draft.orderType) setOrderType(draft.orderType);
+      if (draft.workStatus) setSelectedWorkStatus(draft.workStatus);
+      if (draft.failReason) setFailReason(draft.failReason);
+      if (draft.warrantyTime) setSelectedWarrantyTime(draft.warrantyTime);
+      if (draft.customerSource) setSelectedCustomerSource(draft.customerSource);
+      if (draft.priority) setSelectedPriority(draft.priority);
+      if (draft.orderCode) setOrderCode(draft.orderCode);
+    }
+  }, []);
+
+  // Tự động lưu bản nháp vào LocalStorage mỗi khi trường dữ liệu thay đổi
+  useEffect(() => {
+    const draft: Partial<CachedFormData> = {
+      formId,
+      orderCode,
+      orderType,
+      appointmentDate,
+      appointmentTime,
+      deadline,
+      customerName,
+      customerPhone,
+      address,
+      customerLocation,
+      jobDescription,
+      completedItems,
+      quotedAmount,
+      discount,
+      paidAmount,
+      costPrice,
+      workStatus: selectedWorkStatus,
+      failReason,
+      warrantyTime: selectedWarrantyTime,
+      customerSource: selectedCustomerSource,
+      csStaff: selectedCsStaff,
+      assignee: selectedAssignee,
+      priority: selectedPriority,
+      selectedCustomerId: selectedCustomer?.id,
+    };
+    saveFormDraft(draft);
+  }, [
+    formId,
+    orderCode,
+    orderType,
+    appointmentDate,
+    appointmentTime,
+    deadline,
+    customerName,
+    customerPhone,
+    address,
+    customerLocation,
+    jobDescription,
+    completedItems,
+    quotedAmount,
+    discount,
+    paidAmount,
+    costPrice,
+    selectedWorkStatus,
+    failReason,
+    selectedWarrantyTime,
+    selectedCustomerSource,
+    selectedCsStaff,
+    selectedAssignee,
+    selectedPriority,
+    selectedCustomer
+  ]);
 
   // API Queries & Mutations
   const { data: customerData } = useQuery({
@@ -276,6 +415,7 @@ const POSPage: React.FC = () => {
     mutationFn: (payload: CreateOrderPayload & any) => createOrder(payload),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['salesOrders'] });
+      clearFormDraft();
       alert(`Đã lưu Form Kỹ Thuật thành công! Mã đơn hàng: ${data.orderCode || orderCode}`);
       // Clear form except IDs
       setCustomerSearch('');
@@ -294,14 +434,134 @@ const POSPage: React.FC = () => {
     },
     onError: (err: any) => {
       console.error(err);
-      alert(err.response?.data?.message || 'Có lỗi xảy ra khi lưu biểu mẫu.');
+      // Nếu lỗi do mạng, tự động lưu offline vào máy
+      if (!navigator.onLine || err.code === 'ERR_NETWORK' || !err.response) {
+        saveCurrentFormOffline();
+      } else {
+        alert(err.response?.data?.message || 'Có lỗi xảy ra khi lưu biểu mẫu.');
+      }
     }
   });
+
+  // Lưu form vào Local Storage khi mất mạng
+  const saveCurrentFormOffline = () => {
+    const offlineItem: CachedFormData = {
+      formId,
+      orderCode,
+      orderType,
+      appointmentDate,
+      appointmentTime,
+      deadline,
+      customerName,
+      customerPhone,
+      address,
+      customerLocation,
+      jobDescription,
+      completedItems,
+      quotedAmount,
+      discount,
+      paidAmount,
+      costPrice,
+      workStatus: selectedWorkStatus,
+      failReason,
+      warrantyTime: selectedWarrantyTime,
+      customerSource: selectedCustomerSource,
+      csStaff: selectedCsStaff,
+      assignee: selectedAssignee,
+      priority: selectedPriority,
+      selectedCustomerId: selectedCustomer?.id,
+      createdAt: new Date().toISOString(),
+      synced: false,
+    };
+    saveOfflineOrder(offlineItem);
+    reloadOfflineList();
+    clearFormDraft();
+    setSaveStatusMessage('Đã lưu dữ liệu vào bộ nhớ máy (Offline) thành công!');
+    setTimeout(() => setSaveStatusMessage(''), 5000);
+    alert(`Không có kết nối mạng! Dữ liệu lịch trình đơn #${orderCode} đã được lưu tạm an toàn vào LocalStorage máy của bạn. Khi có mạng trở lại, bạn có thể bấm "Đồng bộ" để gửi lên server.`);
+  };
+
+  // Đồng bộ các đơn hàng lưu trong local lên server
+  const handleSyncPendingOrders = async () => {
+    if (!navigator.onLine) {
+      alert('Hiện tại vẫn chưa có kết nối mạng internet. Vui lòng kiểm tra lại kết nối!');
+      return;
+    }
+    const pending = getOfflinePendingOrders();
+    if (pending.length === 0) {
+      alert('Không có dữ liệu chờ đồng bộ trong bộ nhớ local.');
+      return;
+    }
+
+    setIsSyncingOffline(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const item of pending) {
+      try {
+        const payload: CreateOrderPayload & any = {
+          orderCode: item.orderCode,
+          customerId: item.selectedCustomerId || undefined,
+          invoiceTotal: item.quotedAmount,
+          discount: item.discount,
+          status: 'PENDING',
+          paymentMethod: item.paidAmount > 0 ? 'CASH' : 'CASH',
+          notes: JSON.stringify({
+            formId: item.formId,
+            appointmentDate: item.appointmentDate,
+            appointmentTime: item.appointmentTime,
+            deadline: item.deadline,
+            address: item.address,
+            customerLocation: item.customerLocation,
+            jobDescription: item.jobDescription,
+            completedItems: item.completedItems,
+            paidAmount: item.paidAmount,
+            orderType: item.orderType,
+            workStatus: item.workStatus,
+            failReason: item.failReason,
+            warrantyTime: item.warrantyTime,
+            customerSource: item.customerSource,
+            csStaff: item.csStaff,
+            assignee: item.assignee,
+            costPrice: item.costPrice,
+            priority: item.priority,
+            customerName: item.customerName,
+            customerPhone: item.customerPhone,
+          }),
+          items: [],
+          createdAt: item.appointmentDate ? new Date(item.appointmentDate).toISOString() : undefined,
+        };
+        await createOrder(payload);
+        removeOfflineOrder(item.formId);
+        successCount++;
+      } catch (e) {
+        console.error('Lỗi sync đơn offline:', item.orderCode, e);
+        failCount++;
+      }
+    }
+
+    setIsSyncingOffline(false);
+    reloadOfflineList();
+    queryClient.invalidateQueries({ queryKey: ['salesOrders'] });
+
+    if (failCount === 0) {
+      alert(`Đồng bộ thành công tất cả ${successCount} đơn hàng kỹ thuật lên hệ thống!`);
+      setShowOfflineModal(false);
+    } else {
+      alert(`Đã đồng bộ ${successCount} đơn thành công, còn lại ${failCount} đơn chưa đồng bộ được.`);
+    }
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!appointmentDate) {
       alert('Vui lòng điền ngày hẹn!');
+      return;
+    }
+
+    // Nếu người dùng đang ngoại tuyến, trực tiếp lưu vào local
+    if (!navigator.onLine) {
+      saveCurrentFormOffline();
       return;
     }
 
@@ -353,32 +613,145 @@ const POSPage: React.FC = () => {
       <header style={{
         backgroundColor: '#d81b60',
         color: 'white',
-        padding: '1rem 1.25rem',
+        padding: '0.875rem 1.25rem',
         display: 'flex',
         alignItems: 'center',
-        gap: '1rem',
+        justifyContent: 'space-between',
         position: 'sticky',
         top: 0,
         zIndex: 100,
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
       }}>
-        <button style={{
-          background: 'none',
-          border: 'none',
-          color: 'white',
-          cursor: 'pointer',
-          padding: '0.25rem',
-          display: 'flex',
-          alignItems: 'center'
-        }}>
-          <Menu size={24} />
-        </button>
-        <h1 style={{
-          fontSize: '1.25rem',
-          fontWeight: '700',
-          margin: 0
-        }}>KyThuat Form</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button 
+            type="button"
+            onClick={() => window.history.back()}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'white',
+              cursor: 'pointer',
+              padding: '0.25rem',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            <Menu size={24} />
+          </button>
+          <div>
+            <h1 style={{
+              fontSize: '1.15rem',
+              fontWeight: '700',
+              margin: 0
+            }}>KyThuat Form</h1>
+            <div style={{ fontSize: '0.72rem', opacity: 0.9, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              {isOnline ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', color: '#bbf7d0' }}>
+                  <Wifi size={12} /> Trực tuyến
+                </span>
+              ) : (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', color: '#fef08a', fontWeight: 'bold' }}>
+                  <WifiOff size={12} /> Ngoại tuyến (Đang lưu local)
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Header Action Buttons: QR & Offline Queue Modal */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {/* Quick QR Payment Generator Button */}
+          <button
+            type="button"
+            onClick={() => {
+              setLocalQR(getLocalQRCache());
+              setShowQRModal(true);
+            }}
+            title="Mở mã QR thanh toán (dùng được cả khi không có mạng)"
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              border: '1px solid rgba(255,255,255,0.4)',
+              color: 'white',
+              borderRadius: '0.375rem',
+              padding: '0.4rem 0.65rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontSize: '0.78rem',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+          >
+            <QrCode size={16} />
+            <span style={{ display: 'inline' }}>Mã QR</span>
+          </button>
+
+          {/* Pending Offline Queue Button */}
+          <button
+            type="button"
+            onClick={() => {
+              reloadOfflineList();
+              setShowOfflineModal(true);
+            }}
+            title="Xem danh sách đơn lưu tạm offline trong máy"
+            style={{
+              backgroundColor: offlineOrders.length > 0 ? '#fbbf24' : 'rgba(255,255,255,0.2)',
+              border: 'none',
+              color: offlineOrders.length > 0 ? '#78350f' : 'white',
+              borderRadius: '0.375rem',
+              padding: '0.4rem 0.65rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontSize: '0.78rem',
+              fontWeight: '700',
+              cursor: 'pointer',
+              position: 'relative'
+            }}
+          >
+            <Database size={16} />
+            <span>Đơn Local ({offlineOrders.length})</span>
+          </button>
+        </div>
       </header>
+
+      {/* Save status notification banner */}
+      {saveStatusMessage && (
+        <div style={{
+          backgroundColor: '#ecfdf5',
+          borderBottom: '1px solid #a7f3d0',
+          color: '#065f46',
+          padding: '0.6rem 1rem',
+          fontSize: '0.85rem',
+          textAlign: 'center',
+          fontWeight: '600',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.5rem'
+        }}>
+          <Check size={16} color="#059669" />
+          {saveStatusMessage}
+        </div>
+      )}
+
+      {/* Offline Warning Banner */}
+      {!isOnline && (
+        <div style={{
+          backgroundColor: '#fffbeb',
+          borderBottom: '1px solid #fde68a',
+          color: '#92400e',
+          padding: '0.5rem 1rem',
+          fontSize: '0.8rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.5rem'
+        }}>
+          <CloudOff size={16} />
+          <span>Mất kết nối mạng. Toàn bộ dữ liệu bạn nhập sẽ được tự động lưu cục bộ (Local Cache) và có thể đồng bộ khi có mạng.</span>
+        </div>
+      )}
 
       {/* Form Content Container */}
       <main style={{
@@ -661,9 +1034,34 @@ const POSPage: React.FC = () => {
             <MoneyInputField value={discount} onChange={setDiscount} step={10000} />
           </div>
 
-          {/* Paid Amount with adjustment buttons */}
+          {/* Paid Amount with adjustment buttons & QR trigger */}
           <div>
-            <label style={labelStyle}>Đã thanh toán</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <label style={{ ...labelStyle, marginBottom: 0 }}>Đã thanh toán</label>
+              <button
+                type="button"
+                onClick={() => {
+                  setLocalQR(getLocalQRCache());
+                  setShowQRModal(true);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.78rem',
+                  fontWeight: '600',
+                  color: '#d81b60',
+                  background: 'none',
+                  border: '1px dashed #d81b60',
+                  borderRadius: '0.375rem',
+                  padding: '0.2rem 0.5rem',
+                  cursor: 'pointer'
+                }}
+              >
+                <QrCode size={14} />
+                Quét QR Chuyển Khoản
+              </button>
+            </div>
             <MoneyInputField value={paidAmount} onChange={setPaidAmount} step={50000} />
           </div>
 
@@ -1059,6 +1457,309 @@ const POSPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Offline Pending Orders Modal */}
+      {showOfflineModal && (
+        <div style={modalOverlayStyle}>
+          <div style={{ ...modalContentStyle, maxWidth: '580px', maxHeight: '85vh' }}>
+            <div style={modalHeaderStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Database size={20} color="#d81b60" />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#1e293b' }}>
+                  Đơn hàng lưu tạm trong máy (Offline)
+                </h3>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowOfflineModal(false)}
+                style={closeModalButtonStyle}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: '1rem', overflowY: 'auto', flex: 1 }}>
+              <div style={{
+                backgroundColor: '#f8fafc',
+                padding: '0.75rem',
+                borderRadius: '0.5rem',
+                fontSize: '0.8rem',
+                color: '#64748b',
+                marginBottom: '1rem',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <span>Tổng cộng: <strong>{offlineOrders.length}</strong> đơn lưu cục bộ</span>
+                <span style={{ 
+                  color: isOnline ? '#059669' : '#d97706', 
+                  fontWeight: '700',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.25rem' 
+                }}>
+                  {isOnline ? <Wifi size={14} /> : <WifiOff size={14} />}
+                  {isOnline ? 'Đã có mạng (sẵn sàng đồng bộ)' : 'Chưa có mạng'}
+                </span>
+              </div>
+
+              {offlineOrders.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#94a3b8' }}>
+                  <Database size={40} style={{ margin: '0 auto 0.75rem', opacity: 0.4 }} />
+                  <p style={{ margin: 0, fontSize: '0.9rem' }}>Hiện không có đơn hàng nào lưu offline.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {offlineOrders.map((ord) => (
+                    <div 
+                      key={ord.formId}
+                      style={{
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '0.5rem',
+                        padding: '0.85rem',
+                        backgroundColor: 'white',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.4rem'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <span style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.9rem' }}>
+                            Mã: #{ord.orderCode}
+                          </span>
+                          <span style={{
+                            marginLeft: '0.5rem',
+                            fontSize: '0.7rem',
+                            padding: '0.15rem 0.4rem',
+                            borderRadius: '0.25rem',
+                            backgroundColor: '#fee2e2',
+                            color: '#e11d48',
+                            fontWeight: '600'
+                          }}>
+                            {ord.orderType}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
+                          {new Date(ord.createdAt).toLocaleTimeString('vi-VN')} {new Date(ord.createdAt).toLocaleDateString('vi-VN')}
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: '0.82rem', color: '#334155' }}>
+                        Khách: <strong>{ord.customerName || 'Chưa có tên'}</strong> - SĐT: {ord.customerPhone || '---'}
+                      </div>
+                      {ord.address && (
+                        <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
+                          Đ/c: {ord.address}
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                        <span style={{ fontSize: '0.82rem', color: '#059669', fontWeight: '700' }}>
+                          Báo giá: {formatCurrency(ord.quotedAmount)}
+                        </span>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Tải lại dữ liệu đơn này vào form
+                              setAppointmentDate(ord.appointmentDate || '');
+                              setAppointmentTime(ord.appointmentTime || '00:00:00');
+                              setDeadline(ord.deadline || '');
+                              setCustomerName(ord.customerName || '');
+                              setCustomerPhone(ord.customerPhone || '');
+                              setAddress(ord.address || '');
+                              setCustomerLocation(ord.customerLocation || 'http://');
+                              setJobDescription(ord.jobDescription || '');
+                              setCompletedItems(ord.completedItems || '');
+                              setQuotedAmount(ord.quotedAmount || 0);
+                              setDiscount(ord.discount || 0);
+                              setPaidAmount(ord.paidAmount || 0);
+                              setCostPrice(ord.costPrice || 0);
+                              setOrderType(ord.orderType || 'Dịch Vụ');
+                              setSelectedWorkStatus(ord.workStatus || 'Chờ xử lý');
+                              setFailReason(ord.failReason || '');
+                              setSelectedWarrantyTime(ord.warrantyTime || 'Không bảo hành');
+                              setSelectedCustomerSource(ord.customerSource || 'Facebook');
+                              setSelectedPriority(ord.priority || 'Trung bình');
+                              setOrderCode(ord.orderCode);
+                              setShowOfflineModal(false);
+                            }}
+                            style={{
+                              padding: '0.3rem 0.6rem',
+                              fontSize: '0.75rem',
+                              fontWeight: '600',
+                              backgroundColor: '#f1f5f9',
+                              border: '1px solid #cbd5e1',
+                              borderRadius: '0.25rem',
+                              cursor: 'pointer',
+                              color: '#475569'
+                            }}
+                          >
+                            Đưa vào form
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Bạn có chắc muốn xóa bản ghi offline của đơn #${ord.orderCode}?`)) {
+                                removeOfflineOrder(ord.formId);
+                                reloadOfflineList();
+                              }
+                            }}
+                            style={{
+                              padding: '0.3rem 0.6rem',
+                              fontSize: '0.75rem',
+                              fontWeight: '600',
+                              backgroundColor: '#fee2e2',
+                              border: 'none',
+                              borderRadius: '0.25rem',
+                              cursor: 'pointer',
+                              color: '#dc2626'
+                            }}
+                          >
+                            Xóa
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={modalFooterStyle}>
+              <button
+                type="button"
+                onClick={() => setShowOfflineModal(false)}
+                style={cancelModalButtonStyle}
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={handleSyncPendingOrders}
+                disabled={offlineOrders.length === 0 || isSyncingOffline || !isOnline}
+                style={{
+                  ...confirmModalButtonStyle,
+                  backgroundColor: isOnline && offlineOrders.length > 0 ? '#059669' : '#94a3b8',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  cursor: isOnline && offlineOrders.length > 0 && !isSyncingOffline ? 'pointer' : 'not-allowed'
+                }}
+              >
+                {isSyncingOffline ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={16} />
+                )}
+                Đồng bộ lên Server ({offlineOrders.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Offline QR Code Modal */}
+      {showQRModal && (
+        <div style={modalOverlayStyle}>
+          <div style={{ ...modalContentStyle, maxWidth: '420px', textAlign: 'center' }}>
+            <div style={modalHeaderStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <QrCode size={20} color="#d81b60" />
+                <h3 style={{ margin: 0, fontSize: '1.05rem', color: '#1e293b' }}>
+                  QR Thanh Toán (Hỗ trợ Offline)
+                </h3>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowQRModal(false)}
+                style={closeModalButtonStyle}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+              <div style={{
+                backgroundColor: 'white',
+                padding: '0.75rem',
+                borderRadius: '0.75rem',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 8px 16px -4px rgba(0,0,0,0.1)'
+              }}>
+                {localQR.cachedDataUrl ? (
+                  <img
+                    src={localQR.cachedDataUrl}
+                    alt="VietQR Offline"
+                    style={{ width: '220px', height: '220px', display: 'block', objectFit: 'contain' }}
+                  />
+                ) : (
+                  <img
+                    src={`https://img.vietqr.io/image/${localQR.bank}-${(localQR.account || '').trim()}-compact2.png?amount=${paidAmount || quotedAmount || 0}&addInfo=${encodeURIComponent(localQR.memo || 'Thanh toan')}&accountName=${encodeURIComponent((localQR.accountName || '').trim().toUpperCase())}`}
+                    alt="VietQR"
+                    style={{ width: '220px', height: '220px', display: 'block', objectFit: 'contain' }}
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Amount info */}
+              <div style={{
+                backgroundColor: '#f8fafc',
+                padding: '0.75rem 1rem',
+                borderRadius: '0.5rem',
+                width: '100%',
+                boxSizing: 'border-box'
+              }}>
+                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Số tiền thanh toán:</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#059669', margin: '0.2rem 0' }}>
+                  {formatCurrency(paidAmount > 0 ? paidAmount : (quotedAmount > 0 ? quotedAmount : 0))}
+                </div>
+                <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#1e293b' }}>
+                  {localQR.bank} - {localQR.account || 'Chưa cấu hình tài khoản'}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: '#d81b60', fontWeight: '600' }}>
+                  {(localQR.accountName || '').toUpperCase()}
+                </div>
+                {localQR.memo && (
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>
+                    Nội dung: <strong>{localQR.memo} #{orderCode}</strong>
+                  </div>
+                )}
+              </div>
+
+              {!isOnline && (
+                <div style={{
+                  fontSize: '0.75rem',
+                  color: '#92400e',
+                  backgroundColor: '#fef3c7',
+                  padding: '0.4rem 0.6rem',
+                  borderRadius: '0.375rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}>
+                  <WifiOff size={14} />
+                  <span>Đang hoạt động ở chế độ Offline. Khách hàng vẫn có thể quét mã chuyển khoản bình thường!</span>
+                </div>
+              )}
+            </div>
+
+            <div style={modalFooterStyle}>
+              <button
+                type="button"
+                onClick={() => setShowQRModal(false)}
+                style={{ ...confirmModalButtonStyle, width: '100%', backgroundColor: '#d81b60' }}
+              >
+                Xác nhận đã xem QR
+              </button>
+            </div>
           </div>
         </div>
       )}

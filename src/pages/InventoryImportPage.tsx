@@ -32,13 +32,63 @@ interface ImportItem {
   costPrice: number;
   priceType: 'base' | 'packaging';
   expiryDate: string;
+  itemNote?: string;
   isGift: boolean;
+  trackImei?: boolean;
   imeis?: string[];
   serialInput?: string;
   conversionFactor?: number; // kept for legacy compat if needed
   quantityBoxes?: number; // kept for legacy compat if needed
   packagingUnitId?: string; // kept for legacy compat if needed
 }
+
+interface InventoryImportDraft {
+  version: 1;
+  savedAt: string;
+  importDate: string;
+  distributorId: string;
+  distributorSearch: string;
+  invoiceName: string;
+  personnelId: string;
+  items: ImportItem[];
+  taxPercentage: number;
+  discountValue: number;
+  discountType: 'fixed' | 'percentage';
+  shippingFee: number;
+  paymentMethod: 'cash' | 'transfer';
+  amountPaid: number;
+}
+
+const getInventoryImportDraftKey = (branchId: string, userId: string) =>
+  `inventory_import_draft_v1:${encodeURIComponent(branchId)}:${encodeURIComponent(userId)}`;
+
+const readInventoryImportDraft = (key: string): InventoryImportDraft | null => {
+  try {
+    const rawDraft = localStorage.getItem(key);
+    if (!rawDraft) return null;
+
+    const draft = JSON.parse(rawDraft) as Partial<InventoryImportDraft>;
+    if (draft.version !== 1 || !Array.isArray(draft.items)) {
+      console.warn('Bản nháp nhập kho không hợp lệ và sẽ được bỏ qua.');
+      return null;
+    }
+
+    return draft as InventoryImportDraft;
+  } catch (error) {
+    console.error('Không thể đọc bản nháp nhập kho:', error);
+    return null;
+  }
+};
+
+const hasInventoryImportDraftContent = (draft: InventoryImportDraft) =>
+  draft.items.length > 0 ||
+  Boolean(draft.distributorId || draft.distributorSearch || draft.invoiceName) ||
+  draft.importDate !== new Date().toISOString().split('T')[0] ||
+  draft.taxPercentage !== 0 ||
+  draft.discountValue !== 0 ||
+  draft.shippingFee !== 0 ||
+  draft.amountPaid !== 0 ||
+  draft.paymentMethod !== 'cash';
 
 const normalizeHeader = (value: unknown) => {
   if (value === undefined || value === null) return '';
@@ -57,8 +107,31 @@ const getNumberValue = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const productTracksImei = (product: Product) =>
-  Boolean(product.hasImei || (product as any).isImei || (product as any).manageImei);
+const productTracksImei = (product: Product, item?: ImportItem) =>
+  Boolean(
+    item?.trackImei ||
+    (item?.imeis && item.imeis.length > 0) ||
+    product?.hasImei === true ||
+    String(product?.hasImei) === 'true' ||
+    (product as any)?.isImei ||
+    (product as any)?.manageImei ||
+    (product?.imeis && product.imeis.length > 0)
+  );
+
+const getImportItemQuantity = (item: ImportItem) =>
+  (item.unitQuantities[item.baseUnitId] || 0) +
+  (item.product.units || []).reduce(
+    (total, productUnit) => total + (item.unitQuantities[productUnit.unitId] || 0) * (productUnit.conversionFactor || 1),
+    0,
+  );
+
+const getImportItemUnitPrice = (item: ImportItem) => {
+  const quantity = getImportItemQuantity(item);
+  return quantity > 0 ? Math.round(item.costPrice / quantity) : item.costPrice;
+};
+
+const getImportItemAmount = (item: ImportItem) =>
+  item.isGift ? 0 : getImportItemUnitPrice(item) * getImportItemQuantity(item);
 
 const InventoryImportPage: React.FC = () => {
   const { t } = useTranslation();
@@ -85,6 +158,15 @@ const InventoryImportPage: React.FC = () => {
     const role = currentUser.role || currentUser.userRole;
     return role?.toLowerCase() === 'admin';
   }, [currentUser]);
+  const draftUserId = String(currentUser?.id || currentUser?.userId || 'default');
+  const draftKey = !editId && selectedBranchId
+    ? getInventoryImportDraftKey(selectedBranchId, draftUserId)
+    : null;
+  const [initialDraftState] = useState(() => ({
+    key: draftKey,
+    draft: draftKey ? readInventoryImportDraft(draftKey) : null,
+  }));
+  const initialDraft = initialDraftState.draft;
 
   const { data: editingBatch, isLoading: isLoadingBatch } = useQuery({
     queryKey: ['inventoryBatch', editId],
@@ -97,8 +179,18 @@ const InventoryImportPage: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
       queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
+      queryClient.invalidateQueries({ queryKey: ['importOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['importOrder'] });
       navigate('/admin/inventory');
-    }
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message;
+      alert(
+        Array.isArray(message)
+          ? message.join('\n')
+          : message || error?.message || 'Không thể cập nhật lô hàng.',
+      );
+    },
   });
 
   useEffect(() => {
@@ -111,19 +203,21 @@ const InventoryImportPage: React.FC = () => {
       setTaxPercentage(editingBatch.taxAmount ? (editingBatch.taxAmount / (editingBatch.costPrice || 1)) * 100 : 0); // Simplified back-calc
       setDiscountValue(editingBatch.discountAmount || 0);
       setDiscountType('fixed');
-      setShippingFee(editingBatch.shippingFee || 0);
+      setShippingFee(Number(editingBatch.shippingFee) || 0);
       
       // Calculate total for the item
       // Note: In our new system costPrice is total.
+      const baseUnitId = editingBatch.unitId || editingBatch.product?.unitId || '';
       const newItem: ImportItem = {
         id: editingBatch.id,
         product: editingBatch.product!,
-        unitQuantities: { [editingBatch.unitId || editingBatch.product!.unitId]: editingBatch.importedQuantity },
+        unitQuantities: { [baseUnitId]: editingBatch.importedQuantity },
         quantityPieces: editingBatch.importedQuantity,
-        baseUnitId: editingBatch.unitId || editingBatch.product!.unitId || '',
+        baseUnitId,
         costPrice: editingBatch.costPrice * editingBatch.importedQuantity, // Converting back to TOTAL if DB stores unit price
         priceType: 'base',
         expiryDate: editingBatch.expiryDate ? new Date(editingBatch.expiryDate).toISOString().split('T')[0] : '',
+        itemNote: editingBatch.itemNote || '',
         isGift: editingBatch.isGift || false,
         imeis: editingBatch.imeis || [],
         serialInput: (editingBatch.imeis || []).join(', '),
@@ -150,30 +244,38 @@ const InventoryImportPage: React.FC = () => {
   }, []);
 
   // Form State
-  const [importDate, setImportDate] = useState(new Date().toISOString().split('T')[0]);
-  const [distributorId, setDistributorId] = useState('');
-  const [invoiceName, setInvoiceName] = useState('');
-  const [personnelId, setPersonnelId] = useState('');
+  const [importDate, setImportDate] = useState(initialDraft?.importDate || new Date().toISOString().split('T')[0]);
+  const [distributorId, setDistributorId] = useState(initialDraft?.distributorId || '');
+  const [invoiceName, setInvoiceName] = useState(initialDraft?.invoiceName || '');
+  const [personnelId, setPersonnelId] = useState(initialDraft?.personnelId || '');
   
   useEffect(() => {
     if (!personnelId && currentUser?.fullName) {
       setPersonnelId(currentUser.fullName);
     }
   }, [currentUser, personnelId]);
-  const [items, setItems] = useState<ImportItem[]>([]);
+  const [items, setItems] = useState<ImportItem[]>(initialDraft?.items || []);
   
   // Financial State
-  const [taxPercentage, setTaxPercentage] = useState(0);
-  const [discountValue, setDiscountValue] = useState(0);
-  const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>('fixed');
-  const [shippingFee, setShippingFee] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer'>('cash');
-  const [amountPaid, setAmountPaid] = useState(0);
+  const [taxPercentage, setTaxPercentage] = useState(initialDraft?.taxPercentage || 0);
+  const [discountValue, setDiscountValue] = useState(initialDraft?.discountValue || 0);
+  const [discountType, setDiscountType] = useState<'fixed' | 'percentage'>(initialDraft?.discountType || 'fixed');
+  const [shippingFee, setShippingFee] = useState(initialDraft?.shippingFee || 0);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'transfer'>(initialDraft?.paymentMethod || 'cash');
+  const [amountPaid, setAmountPaid] = useState(initialDraft?.amountPaid || 0);
+  const isDraftReady = Boolean(draftKey && initialDraftState.key === draftKey);
+  const [isDraftRecovered, setIsDraftRecovered] = useState(Boolean(initialDraft));
+  const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saved' | 'error'>(initialDraft ? 'saved' : 'idle');
+  const [draftSavedAt, setDraftSavedAt] = useState(initialDraft?.savedAt || '');
+  const activeDraftKeyRef = useRef<string | null>(isDraftReady ? draftKey : null);
+  const draftReadyRef = useRef(false);
+  const draftSnapshotRef = useRef<InventoryImportDraft | null>(null);
+  const previousTotalRef = useRef<number | null>(null);
 
   // Search State
   const [productSearch, setProductSearch] = useState('');
   const [showProductResults, setShowProductResults] = useState(false);
-  const [distributorSearch, setDistributorSearch] = useState('');
+  const [distributorSearch, setDistributorSearch] = useState(initialDraft?.distributorSearch || '');
   const [showDistributorDropdown, setShowDistributorDropdown] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -184,6 +286,94 @@ const InventoryImportPage: React.FC = () => {
   const [isSearchDrawerOpen, setIsSearchDrawerOpen] = useState(false);
   const [drawerProductSearch, setDrawerProductSearch] = useState('');
   const [drawerCategoryFilter, setDrawerCategoryFilter] = useState('');
+
+  const draftSnapshot = useMemo<InventoryImportDraft>(() => ({
+    version: 1,
+    savedAt: new Date().toISOString(),
+    importDate,
+    distributorId,
+    distributorSearch,
+    invoiceName,
+    personnelId,
+    items,
+    taxPercentage,
+    discountValue,
+    discountType,
+    shippingFee,
+    paymentMethod,
+    amountPaid,
+  }), [
+    importDate,
+    distributorId,
+    distributorSearch,
+    invoiceName,
+    personnelId,
+    items,
+    taxPercentage,
+    discountValue,
+    discountType,
+    shippingFee,
+    paymentMethod,
+    amountPaid,
+  ]);
+
+  useEffect(() => {
+    activeDraftKeyRef.current = isDraftReady ? draftKey : null;
+    draftReadyRef.current = isDraftReady;
+    draftSnapshotRef.current = draftSnapshot;
+  }, [draftKey, draftSnapshot, isDraftReady]);
+
+  useEffect(() => {
+    if (!draftKey || !isDraftReady || activeDraftKeyRef.current !== draftKey) return;
+
+    const timer = window.setTimeout(() => {
+      const currentDraft = draftSnapshotRef.current;
+      if (!currentDraft) return;
+
+      try {
+        if (hasInventoryImportDraftContent(currentDraft)) {
+          const draftToSave = { ...currentDraft, savedAt: new Date().toISOString() };
+          localStorage.setItem(draftKey, JSON.stringify(draftToSave));
+          setDraftSavedAt(draftToSave.savedAt);
+          setDraftSaveStatus('saved');
+        } else {
+          localStorage.removeItem(draftKey);
+          setIsDraftRecovered(false);
+          setDraftSavedAt('');
+          setDraftSaveStatus('idle');
+        }
+      } catch (error) {
+        console.error('Không thể tự động lưu bản nháp nhập kho:', error);
+        setDraftSaveStatus('error');
+      }
+    }, 500);
+
+    return () => window.clearTimeout(timer);
+  }, [draftKey, isDraftReady, draftSnapshot]);
+
+  useEffect(() => {
+    const persistCurrentDraft = () => {
+      const key = activeDraftKeyRef.current;
+      const currentDraft = draftSnapshotRef.current;
+      if (!key || !draftReadyRef.current || !currentDraft) return;
+
+      try {
+        if (hasInventoryImportDraftContent(currentDraft)) {
+          localStorage.setItem(key, JSON.stringify({ ...currentDraft, savedAt: new Date().toISOString() }));
+        } else {
+          localStorage.removeItem(key);
+        }
+      } catch (error) {
+        console.error('Không thể lưu bản nháp nhập kho khi rời trang:', error);
+      }
+    };
+
+    window.addEventListener('pagehide', persistCurrentDraft);
+    return () => {
+      window.removeEventListener('pagehide', persistCurrentDraft);
+      persistCurrentDraft();
+    };
+  }, []);
 
   const activeFilterCount = (productSearch ? 1 : 0) + (drawerProductSearch ? 1 : 0) + (drawerCategoryFilter ? 1 : 0);
 
@@ -210,17 +400,38 @@ const InventoryImportPage: React.FC = () => {
   const importMutation = useMutation({
     mutationFn: createImportOrder,
     onSuccess: () => {
+      if (activeDraftKeyRef.current) {
+        try {
+          localStorage.removeItem(activeDraftKeyRef.current);
+        } catch (error) {
+          console.error('Không thể xóa bản nháp nhập kho sau khi lưu phiếu:', error);
+          setDraftSaveStatus('error');
+        }
+      }
+      activeDraftKeyRef.current = null;
+      setIsDraftRecovered(false);
       queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['salesInventorySummary'] });
       queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
       queryClient.invalidateQueries({ queryKey: ['importOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['salesProductsBranchPrices'] });
       navigate('/admin/inventory');
-    }
+    },
+    onError: (error: any) => {
+      const message = error?.response?.data?.message;
+      alert(
+        Array.isArray(message)
+          ? message.join('\n')
+          : message || error?.message || 'Không thể tạo phiếu nhập.',
+      );
+    },
   });
 
   const productMutation = useMutation({
     mutationFn: createProduct,
     onSuccess: (newProduct) => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['salesProductsBranchPrices'] });
       handleAddItem(newProduct);
       setIsProductModalOpen(false);
     }
@@ -229,8 +440,7 @@ const InventoryImportPage: React.FC = () => {
   // Calculations
   const subtotal = useMemo(() => {
     return items.reduce((sum, item) => {
-      if (item.isGift) return sum;
-      return sum + item.costPrice;
+      return sum + getImportItemAmount(item);
     }, 0);
   }, [items]);
 
@@ -241,18 +451,21 @@ const InventoryImportPage: React.FC = () => {
     return discountValue;
   }, [subtotal, discountValue, discountType]);
 
-  const total = subtotal + taxAmount + shippingFee - discountAmount;
+  const total = subtotal + taxAmount + Number(shippingFee) - discountAmount;
 
   // Sync amountPaid with total by default
   useEffect(() => {
-    setAmountPaid(total);
+    if (previousTotalRef.current !== null && previousTotalRef.current !== total) {
+      setAmountPaid(total);
+    }
+    previousTotalRef.current = total;
   }, [total]);
 
   // Handlers
   const handleAddItem = (product: Product, details?: any) => {
     const baseQty = 1;
     const baseUnitId = details?.baseUnitId || product.unitId || '';
-    const preFillPrice = product.basePrice || 0;
+    const preFillPrice = product.importPrice || product.basePrice || 0;
     const newItem: ImportItem = {
       id: Math.random().toString(36).substr(2, 9),
       product,
@@ -262,7 +475,9 @@ const InventoryImportPage: React.FC = () => {
       costPrice: details?.costPrice || preFillPrice * baseQty,
       priceType: details?.priceType || 'base',
       expiryDate: details?.expiryDate || '',
+      itemNote: details?.itemNote || '',
       isGift: false,
+      trackImei: details?.trackImei ?? productTracksImei(product),
       imeis: details?.imeis || [],
       serialInput: details?.serialInput ?? (details?.imeis || []).join(', '),
     };
@@ -296,7 +511,7 @@ const InventoryImportPage: React.FC = () => {
 
     // Check for missing IMEIs
     const missingImeiItems = items.filter((item) => {
-      if (!productTracksImei(item.product)) return false;
+      if (!productTracksImei(item.product, item)) return false;
       let totalQty = item.unitQuantities[item.baseUnitId] || 0;
       item.product.units?.forEach((pu: any) => {
         totalQty += (item.unitQuantities[pu.unitId] || 0) * (pu.conversionFactor || 1);
@@ -313,10 +528,7 @@ const InventoryImportPage: React.FC = () => {
     }
 
     const orderItems = items.map(item => {
-      let totalQty = item.unitQuantities[item.baseUnitId] || 0;
-      item.product.units?.forEach((pu: any) => {
-        totalQty += (item.unitQuantities[pu.unitId] || 0) * pu.conversionFactor;
-      });
+      const totalQty = getImportItemQuantity(item);
 
       let unitPrice = item.costPrice;
       if (item.priceType === 'packaging') {
@@ -324,16 +536,18 @@ const InventoryImportPage: React.FC = () => {
         const factor = defaultUnit?.conversionFactor || 1;
         unitPrice = item.costPrice / (factor || 1);
       } else {
-        unitPrice = item.costPrice / (totalQty || 1);
+        unitPrice = getImportItemUnitPrice(item);
       }
 
       return {
         productId: item.product.id,
         importedQuantity: totalQty,
         costPrice: Math.round(unitPrice),
+        lineTotal: getImportItemAmount(item),
         expiryDate: item.expiryDate || undefined,
+        itemNote: item.itemNote?.trim() || undefined,
         isGift: item.isGift,
-        imeis: productTracksImei(item.product) ? item.imeis || [] : undefined,
+        imeis: productTracksImei(item.product, item) ? item.imeis || [] : undefined,
       };
     });
 
@@ -342,9 +556,15 @@ const InventoryImportPage: React.FC = () => {
       const first = orderItems[0];
       await updateMutation.mutateAsync({
         costPrice: first.costPrice,
-        currentQuantity: first.importedQuantity,
+        importedQuantity: first.importedQuantity,
+        lineTotal: first.lineTotal,
         importDate: importDate || new Date().toISOString().split('T')[0],
+        expiryDate: first.expiryDate,
+        itemNote: first.itemNote,
         invoiceName: invoiceName || undefined,
+        distributorId: distributorId || undefined,
+        personnelName: personnelId || undefined,
+        isGift: first.isGift,
         imeis: first.imeis,
       });
     } else {
@@ -358,6 +578,7 @@ const InventoryImportPage: React.FC = () => {
         discountAmount: discountAmount,
         shippingFee: shippingFee,
         totalAmount: total,
+        paidAmount: amountPaid,
         items: orderItems,
       });
     }
@@ -475,9 +696,21 @@ const InventoryImportPage: React.FC = () => {
           >
             <ArrowLeft size={18} color="#64748b" />
           </button>
-          <h1 style={{ fontSize: isMobile ? '1.15rem' : '1.25rem', fontWeight: '700', color: '#1e293b', margin: 0 }}>
-            {editId ? 'Chỉnh sửa lô hàng' : 'Nhập kho hàng hóa'}
-          </h1>
+          <div>
+            <h1 style={{ fontSize: isMobile ? '1.15rem' : '1.25rem', fontWeight: '700', color: '#1e293b', margin: 0 }}>
+              {editId ? 'Chỉnh sửa lô hàng' : 'Nhập kho hàng hóa'}
+            </h1>
+            {!editId && (
+              <span style={{ color: draftSaveStatus === 'error' ? '#dc2626' : '#64748b', fontSize: '0.72rem' }}>
+                {isDraftRecovered && 'Đã khôi phục bản nháp · '}
+                {draftSaveStatus === 'saved'
+                  ? `Đã tự lưu${draftSavedAt ? ` lúc ${new Date(draftSavedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : ''}`
+                  : draftSaveStatus === 'error'
+                    ? 'Không thể lưu bản nháp trên thiết bị này'
+                    : 'Tự động lưu bản nháp trên thiết bị này'}
+              </span>
+            )}
+          </div>
         </div>
         <div style={{ 
           display: 'flex', 
@@ -811,6 +1044,22 @@ const InventoryImportPage: React.FC = () => {
             <Plus size={16} />
             Thêm lẻ sản phẩm
           </button>
+
+          <button 
+            type="button"
+            className="btn-secondary" 
+            onClick={() => setIsProductModalOpen(true)}
+            style={{ 
+              display: 'flex', alignItems: 'center', gap: '0.4rem', 
+              padding: '0.42rem 0.85rem', border: '1px solid #cbd5e1',
+              justifyContent: 'center', whiteSpace: 'nowrap', fontSize: '0.85rem', borderRadius: '0.375rem',
+              backgroundColor: 'white', color: '#334155', cursor: 'pointer'
+            }}
+          >
+            <Plus size={16} style={{ color: '#6366f1' }} />
+            {!isMobile && 'Thêm mới sản phẩm'}
+            {isMobile && 'Tạo mới'}
+          </button>
         </div>
 
         {/* Items Content */}
@@ -859,6 +1108,16 @@ const InventoryImportPage: React.FC = () => {
                       <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>Thành tiền</label>
                       <div style={{ fontWeight: '500' }}>{(item.isGift ? 0 : item.costPrice).toLocaleString()} ₫</div>
                     </div>
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#64748b', marginBottom: '0.25rem' }}>Ghi chú</label>
+                      <input
+                        type="text"
+                        value={item.itemNote || ''}
+                        onChange={(e) => handleUpdateItem(item.id, { itemNote: e.target.value })}
+                        placeholder="Ghi chú cho mặt hàng này..."
+                        style={{ width: '100%', padding: '0.4rem 0.5rem', borderRadius: '0.35rem', border: '1px solid #e2e8f0', fontSize: '0.8rem', outline: 'none' }}
+                      />
+                    </div>
                     <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '0.2rem' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer', fontSize: '0.8rem' }}>
                         <input 
@@ -870,7 +1129,7 @@ const InventoryImportPage: React.FC = () => {
                       </label>
                     </div>
 
-                    {productTracksImei(item.product) && (
+                    {productTracksImei(item.product, item) ? (
                       <div style={{ gridColumn: 'span 2', marginTop: '0.25rem', padding: '0.4rem 0.6rem', backgroundColor: '#f0f9ff', borderRadius: '0.375rem', border: '1px solid #bae6fd' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#0369a1' }}>
@@ -890,6 +1149,30 @@ const InventoryImportPage: React.FC = () => {
                           </div>
                         )}
                       </div>
+                    ) : (
+                      <div style={{ gridColumn: 'span 2', marginTop: '0.25rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleUpdateItem(item.id, { trackImei: true });
+                            handleEditItem({ ...item, trackImei: true });
+                          }}
+                          style={{
+                            fontSize: '0.75rem',
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '0.375rem',
+                            border: '1px dashed #6366f1',
+                            color: '#4f46e5',
+                            backgroundColor: '#f5f3ff',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                          }}
+                        >
+                          + Điền Serial/IMEI
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -902,6 +1185,7 @@ const InventoryImportPage: React.FC = () => {
                   <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '44px' }}>STT</th>
                   <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600' }}>Tên mặt hàng</th>
                   <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '300px' }}>Serial/IMEI</th>
+                  <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '200px' }}>Ghi chú</th>
                   <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '130px' }}>HSD</th>
                   <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '90px' }}>ĐVT</th>
                   <th style={{ padding: '0.55rem 0.85rem', color: 'white', fontSize: '0.82rem', fontWeight: '600', width: '110px', textAlign: 'right' }}>SL nhập</th>
@@ -914,7 +1198,7 @@ const InventoryImportPage: React.FC = () => {
               <tbody>
                 {items.length === 0 ? (
                   <tr>
-                      <td colSpan={10} style={{ padding: '2rem 1rem', textAlign: 'center', color: '#94a3b8' }}>
+                      <td colSpan={11} style={{ padding: '2rem 1rem', textAlign: 'center', color: '#94a3b8' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
                         <div style={{ padding: '0.65rem', borderRadius: '50%', backgroundColor: '#f1f5f9' }}>
                           <Search size={24} />
@@ -924,13 +1208,9 @@ const InventoryImportPage: React.FC = () => {
                     </td>
                   </tr>
                 ) : items.map((item, idx) => {
-                  // Tính tổng SL theo đơn vị cơ bản
-                  let totalQty = item.unitQuantities[item.baseUnitId] || 0;
-                  item.product.units?.forEach((pu: any) => {
-                    totalQty += (item.unitQuantities[pu.unitId] || 0) * pu.conversionFactor;
-                  });
-                  const unitPrice = totalQty > 0 ? Math.round(item.costPrice / totalQty) : item.costPrice;
-                  const lineTotal = item.isGift ? 0 : item.costPrice;
+                  const totalQty = getImportItemQuantity(item);
+                  const unitPrice = getImportItemUnitPrice(item);
+                  const lineTotal = getImportItemAmount(item);
 
                   return (
                     <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: idx % 2 === 0 ? 'white' : '#fafafa' }}>
@@ -940,7 +1220,7 @@ const InventoryImportPage: React.FC = () => {
                       <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{item.product.barcode || item.product.productCode || ''}</div>
                     </td>
                     <td style={{ padding: '0.6rem 0.85rem' }}>
-                      {productTracksImei(item.product) ? (
+                      {productTracksImei(item.product, item) ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                           <span style={{ fontSize: '0.72rem', fontWeight: 700, color: (item.imeis || []).length >= totalQty && totalQty > 0 ? '#059669' : '#d97706' }}>
                             {(item.imeis || []).length}/{totalQty} mã
@@ -958,7 +1238,38 @@ const InventoryImportPage: React.FC = () => {
                             style={{ width: '280px', maxWidth: '100%', padding: '0.35rem 0.5rem', fontSize: '0.78rem', fontFamily: 'monospace', border: '1px solid #7dd3fc', borderRadius: '0.25rem', outline: 'none', backgroundColor: '#f0f9ff', resize: 'vertical' }}
                           />
                         </div>
-                      ) : <span style={{ color: '#94a3b8' }}>--</span>}
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleUpdateItem(item.id, { trackImei: true })}
+                          title="Bấm để mở ô nhập Serial/IMEI cho mặt hàng này"
+                          style={{
+                            fontSize: '0.75rem',
+                            padding: '0.25rem 0.55rem',
+                            borderRadius: '0.375rem',
+                            border: '1px dashed #6366f1',
+                            color: '#4f46e5',
+                            backgroundColor: '#f5f3ff',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                            fontWeight: 500,
+                          }}
+                        >
+                          + Điền Serial/IMEI
+                        </button>
+                      )}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem' }}>
+                      <input
+                        type="text"
+                        aria-label={`Ghi chú cho ${item.product.name}`}
+                        value={item.itemNote || ''}
+                        onChange={(e) => handleUpdateItem(item.id, { itemNote: e.target.value })}
+                        placeholder="Nhập ghi chú..."
+                        style={{ width: '180px', padding: '0.35rem 0.5rem', borderRadius: '0.35rem', border: '1px solid #e2e8f0', fontSize: '0.8rem', outline: 'none' }}
+                      />
                     </td>
                     <td style={{ padding: '0.6rem 1rem' }}>
                       <input
@@ -977,10 +1288,14 @@ const InventoryImportPage: React.FC = () => {
                         min={0}
                         value={item.unitQuantities[item.baseUnitId] || 0}
                         onChange={(e) => {
-                          const qty = Number(e.target.value) || 0;
+                          const quantity = Number(e.target.value) || 0;
+                          const currentBaseQuantity = item.unitQuantities[item.baseUnitId] || 0;
+                          const otherUnitQuantity = totalQty - currentBaseQuantity;
+                          const updatedTotalQuantity = quantity + otherUnitQuantity;
                           handleUpdateItem(item.id, {
-                            unitQuantities: { ...item.unitQuantities, [item.baseUnitId]: qty },
-                            quantityPieces: qty,
+                            unitQuantities: { ...item.unitQuantities, [item.baseUnitId]: quantity },
+                            quantityPieces: updatedTotalQuantity,
+                            costPrice: Math.round(unitPrice * updatedTotalQuantity),
                           });
                         }}
                         className="no-spinner"
@@ -994,8 +1309,7 @@ const InventoryImportPage: React.FC = () => {
                         value={unitPrice || 0}
                         onChange={(e) => {
                           const newUnitPrice = Number(e.target.value) || 0;
-                          const qty = (item.unitQuantities[item.baseUnitId] || 0);
-                          handleUpdateItem(item.id, { costPrice: newUnitPrice * (qty || 1) });
+                          handleUpdateItem(item.id, { costPrice: newUnitPrice * (totalQty || 1) });
                         }}
                         className="no-spinner"
                         style={{ width: '130px', padding: '0.3rem 0.5rem', borderRadius: '0.35rem', border: '1px solid #10b981', backgroundColor: '#f0fdf4', fontSize: '0.875rem', fontWeight: '600', textAlign: 'right', outline: 'none', color: '#065f46' }}
@@ -1092,6 +1406,16 @@ const InventoryImportPage: React.FC = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b' }}>
               <span>Tổng tiền trước thuế:</span>
               <span style={{ fontWeight: '600', color: '#1e293b' }}>{subtotal.toLocaleString()} ₫</span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b' }}>
+              <span>Giảm giá hóa đơn:</span>
+              <span style={{ fontWeight: '600', color: '#1e293b' }}>-{discountAmount.toLocaleString()} ₫</span>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b' }}>
+              <span>Phí vận chuyển:</span>
+              <span style={{ fontWeight: '600', color: '#1e293b' }}>{shippingFee.toLocaleString()} ₫</span>
             </div>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#64748b', alignItems: 'center' }}>

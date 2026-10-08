@@ -1,4 +1,4 @@
-const CACHE_NAME = 'quanly-mobie-cache-v2';
+const CACHE_NAME = 'quanly-mobie-cache-v3';
 const ASSETS = [
   '/',
   '/index.html',
@@ -47,7 +47,8 @@ self.addEventListener('fetch', (event) => {
         }
       }
 
-      if (cachedResponse) return cachedResponse;
+      const isAppBundle = /\.(js|css)(\?|$)/.test(event.request.url);
+      if (cachedResponse && !isAppBundle) return cachedResponse;
 
       try {
         const response = await fetch(event.request);

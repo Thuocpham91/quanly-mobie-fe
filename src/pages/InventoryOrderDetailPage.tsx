@@ -1,16 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Package, Calendar, Building2, User,
-  Receipt, FileText, Truck, TicketPercent, Banknote, Printer
+  ArrowLeft, Package, Calendar, Building2, User, Edit2,
+  Receipt, FileText, Truck, TicketPercent, Banknote, Printer, Trash2
 } from 'lucide-react';
-import { getImportOrder, type ImportOrder, type InventoryBatch } from '../api/inventory';
+import { getImportOrder, deleteImportOrder, deleteInventoryBatch, type ImportOrder, type InventoryBatch } from '../api/inventory';
 import { formatDate } from '../utils/format';
 
 const InventoryOrderDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const { data: order, isLoading } = useQuery<ImportOrder>({
     queryKey: ['importOrder', id],
@@ -22,6 +24,51 @@ const InventoryOrderDetailPage: React.FC = () => {
     Number(val || 0).toLocaleString('vi-VN') + ' ₫';
 
   const handlePrint = () => window.print();
+
+  const handleDeleteOrder = async () => {
+    if (!order) return;
+    const msg = `Xác nhận xóa phiếu nhập "${order.code}"?\n\nToàn bộ lô hàng và tồn kho của các sản phẩm thuộc phiếu nhập này sẽ được trừ/xóa khỏi hệ thống.`;
+    if (!window.confirm(msg)) return;
+
+    try {
+      setIsDeleting(true);
+      await deleteImportOrder(order.id, true);
+      queryClient.invalidateQueries({ queryKey: ['importOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['salesInventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['productBatches'] });
+      queryClient.invalidateQueries({ queryKey: ['productImportHistory'] });
+      alert('Đã xóa phiếu nhập và cập nhật lại tồn kho thành công.');
+      navigate('/admin/inventory');
+    } catch (error: any) {
+      alert(error?.response?.data?.message || error?.message || 'Có lỗi xảy ra khi xóa phiếu nhập.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleDeleteBatch = async (batch: InventoryBatch) => {
+    const prodName = batch.product?.name || `Lô ${batch.id}`;
+    const msg = `Bạn có chắc muốn xóa lô hàng của sản phẩm "${prodName}"?\n\nTồn kho (${batch.importedQuantity} SP) của sản phẩm này sẽ được xóa/trừ tương ứng.`;
+    if (!window.confirm(msg)) return;
+
+    try {
+      await deleteInventoryBatch(batch.id);
+      queryClient.invalidateQueries({ queryKey: ['importOrder', id] });
+      queryClient.invalidateQueries({ queryKey: ['importOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['salesInventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['productBatches'] });
+      queryClient.invalidateQueries({ queryKey: ['productImportHistory'] });
+      alert('Đã xóa lô hàng và cập nhật tồn kho thành công.');
+    } catch (error: any) {
+      alert(error?.response?.data?.message || error?.message || 'Có lỗi xảy ra khi xóa lô hàng.');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -45,7 +92,7 @@ const InventoryOrderDetailPage: React.FC = () => {
   }
 
   const batches: InventoryBatch[] = order.batches || [];
-  const subtotal = batches.reduce((s, b) => s + (b.isGift ? 0 : Number(b.costPrice || 0) * b.importedQuantity), 0);
+  const subtotal = batches.reduce((s, b) => s + (b.isGift ? 0 : Number(b.lineTotal ?? Number(b.costPrice || 0) * b.importedQuantity)), 0);
   const grandTotal = subtotal + Number(order.taxAmount || 0) + Number(order.shippingFee || 0) - Number(order.discountAmount || 0);
 
   const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
@@ -85,12 +132,22 @@ const InventoryOrderDetailPage: React.FC = () => {
             </p>
           </div>
         </div>
-        <button
-          onClick={handlePrint}
-          style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.25rem', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: '600', color: '#475569' }}
-        >
-          <Printer size={16} /> In phiếu
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button
+            onClick={handlePrint}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.25rem', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: '600', color: '#475569' }}
+          >
+            <Printer size={16} /> In phiếu
+          </button>
+          <button
+            onClick={handleDeleteOrder}
+            disabled={isDeleting}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem 1.25rem', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: '600', color: '#dc2626' }}
+            title="Xóa phiếu nhập và trừ tồn kho"
+          >
+            <Trash2 size={16} /> {isDeleting ? 'Đang xóa...' : 'Xóa phiếu'}
+          </button>
+        </div>
       </div>
 
       {/* Info Cards */}
@@ -171,12 +228,13 @@ const InventoryOrderDetailPage: React.FC = () => {
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>Ngày nhập</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>Mã NCC</th>
                 <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569' }}>Nhà cung cấp</th>
+                <th style={{ padding: '0.75rem 1rem', fontWeight: '600', fontSize: '0.8rem', color: '#475569', textAlign: 'center' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {batches.length === 0 && (
                 <tr>
-                  <td colSpan={19} style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
+                  <td colSpan={20} style={{ padding: '3rem', textAlign: 'center', color: '#94a3b8' }}>
                     Không có mặt hàng nào trong phiếu nhập này
                   </td>
                 </tr>
@@ -250,6 +308,26 @@ const InventoryOrderDetailPage: React.FC = () => {
                     <td style={{ padding: '0.875rem 1rem', color: '#64748b', whiteSpace: 'nowrap' }}>{formatDate(batch.importDate || order.importDate || order.createdAt)}</td>
                     <td style={{ padding: '0.875rem 1rem', color: '#2563eb', whiteSpace: 'nowrap' }}>{order.distributor?.code || '--'}</td>
                     <td style={{ padding: '0.875rem 1rem', color: '#475569', whiteSpace: 'nowrap' }}>{order.distributor?.name || '--'}</td>
+                    <td style={{ padding: '0.875rem 1rem', textAlign: 'center' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/admin/inventory/import?editId=${batch.id}`)}
+                          title="Chỉnh sửa lô nhập"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.65rem', border: '1px solid #bfdbfe', borderRadius: '0.375rem', backgroundColor: '#eff6ff', color: '#1d4ed8', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                        >
+                          <Edit2 size={14} /> Sửa lô
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBatch(batch)}
+                          title="Xóa lô hàng và trừ tồn kho"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.65rem', border: '1px solid #fecaca', borderRadius: '0.375rem', backgroundColor: '#fff', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}
+                        >
+                          <Trash2 size={14} /> Xóa lô
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -273,6 +351,7 @@ const InventoryOrderDetailPage: React.FC = () => {
             { label: 'Thuế VAT:', value: formatCurrency(Number(order.taxAmount)), icon: TicketPercent, color: '#64748b' },
             { label: 'Phí vận chuyển:', value: formatCurrency(Number(order.shippingFee)), icon: Truck, color: '#64748b' },
             { label: 'Giảm giá:', value: `- ${formatCurrency(Number(order.discountAmount))}`, icon: TicketPercent, color: '#ef4444' },
+            { label: 'Cần trả nhà cung cấp:', value: formatCurrency(Number(order.debtAmount ?? (grandTotal - Number(order.paidAmount || 0)))), icon: Banknote, color: '#dc2626' },
           ].map((row, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.875rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b' }}>
