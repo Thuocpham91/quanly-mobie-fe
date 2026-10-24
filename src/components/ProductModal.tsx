@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { type Product, getCategories, getItemGroups, getClassifications, getUnits, createCategory, createItemGroup, createClassification, createUnit, uploadMultipleFiles, getNextProductCode } from '../api/inventory';
+import { useBranchContext } from '../context/BranchContext';
 
 interface ProductModalProps {
   isOpen: boolean;
@@ -16,13 +17,25 @@ interface ProductModalProps {
 
 const formatVndInput = (value: number | string | null | undefined): string => {
   if (value === null || value === undefined || value === '') return '';
-  const digits = String(value).replace(/\D/g, '');
+  if (typeof value === 'number') {
+    return Math.round(value).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  const str = String(value).trim();
+  if (str.includes('.') && !str.includes(',')) {
+    const parsed = parseFloat(str);
+    if (!isNaN(parsed)) {
+      return Math.round(parsed).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+  }
+  const digits = str.replace(/\D/g, '');
+  if (!digits) return '';
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 };
 
 const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, product, initialBarcode = '' }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { selectedBranchId } = useBranchContext();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [newUrlInput, setNewUrlInput] = useState('');
@@ -213,12 +226,24 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
           : product.imageUrl
           ? [product.imageUrl]
           : [];
+
+      let initialSellingPrice: number | string | null | undefined = undefined;
+      if (selectedBranchId && product.branchPrices && product.branchPrices.length > 0) {
+        const bp = product.branchPrices.find((p) => p.branchId === selectedBranchId);
+        if (bp && bp.price !== undefined && bp.price !== null && Number.isFinite(Number(bp.price)) && Number(bp.price) >= 0) {
+          initialSellingPrice = bp.price;
+        }
+      }
+      if (initialSellingPrice === undefined || initialSellingPrice === null) {
+        initialSellingPrice = product.basePrice ?? product.sellingPrice ?? product.salePrice ?? product.price;
+      }
+
       setFormData({
         name: product.name || '',
         barcode: product.barcode || '',
         productCode: product.productCode || '',
         importPrice: formatVndInput(product.importPrice),
-        basePrice: formatVndInput(product.basePrice ?? product.sellingPrice ?? product.salePrice ?? product.price),
+        basePrice: formatVndInput(initialSellingPrice),
         manufacturer: product.manufacturer || '',
         imageUrl: product.imageUrl || list[0] || '',
         imageUrls: list,
@@ -263,7 +288,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
         }
       });
     }
-  }, [product, isOpen, initialBarcode]);
+  }, [product, isOpen, initialBarcode, selectedBranchId]);
 
   if (!isOpen) return null;
 
@@ -374,6 +399,22 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
       onClose();
     } catch (error) {
       console.error('Failed to submit product:', error);
+      const response =
+        typeof error === 'object' && error !== null && 'response' in error
+          ? (error as {
+              response?: { status?: number; data?: { message?: string | string[] } };
+            }).response
+          : undefined;
+      const message = response?.data?.message;
+      if (response?.status === 409) {
+        alert(
+          typeof message === 'string'
+            ? message
+            : 'Mã sản phẩm hoặc mã vạch đã tồn tại.',
+        );
+      } else {
+        alert('Không thể lưu sản phẩm. Vui lòng kiểm tra dữ liệu và thử lại.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -481,6 +522,9 @@ const ProductModal: React.FC<ProductModalProps> = ({ isOpen, onClose, onSubmit, 
                 onChange={handlePriceChange}
                 style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: '0.75rem', border: '1px solid var(--border)', outline: 'none' }}
               />
+              <span style={{ display: 'block', marginTop: '0.35rem', fontSize: '0.75rem', color: '#64748b' }}>
+                Có thể để trống và bổ sung hoặc chỉnh sửa sau.
+              </span>
             </div>
 
             {/* Image Upload Section */}

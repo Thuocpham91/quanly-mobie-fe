@@ -9,6 +9,7 @@ import { type PaginatedResponse } from '../api/client';
 import { 
   getProductsPaginated, deleteProduct, type Product,
   createProduct, updateProduct, importProductsExcel,
+  setProductBranchPrice,
   getCategories, deleteCategory,
   getUnits, deleteUnit,
   getItemGroups, deleteItemGroup,
@@ -118,6 +119,19 @@ const ProductsPage: React.FC = () => {
   const { data: units = [] } = useQuery({ queryKey: ['units'], queryFn: getUnits });
   const { data: groups = [] } = useQuery({ queryKey: ['itemGroups'], queryFn: getItemGroups });
   const { selectedBranchId } = useBranchContext();
+
+  const getProductSellingPrice = (product: Product): number | undefined => {
+    if (selectedBranchId && product.branchPrices && product.branchPrices.length > 0) {
+      const bp = product.branchPrices.find((p) => p.branchId === selectedBranchId);
+      if (bp && bp.price !== undefined && bp.price !== null && Number.isFinite(Number(bp.price)) && Number(bp.price) >= 0) {
+        return Number(bp.price);
+      }
+    }
+    const defaultPrice = product.basePrice ?? product.sellingPrice ?? product.salePrice ?? product.price;
+    return defaultPrice !== undefined && defaultPrice !== null && Number.isFinite(Number(defaultPrice))
+      ? Number(defaultPrice)
+      : undefined;
+  };
  
   const { data: inventorySummary = [] } = useQuery({
     queryKey: ['inventorySummary', selectedBranchId],
@@ -137,12 +151,32 @@ const ProductsPage: React.FC = () => {
  
   // Mutations
   const productMutation = useMutation({
-    mutationFn: (data: Partial<Product>) => {
-      if (editingProduct) return updateProduct(editingProduct.id, data);
-      return createProduct(data);
+    mutationFn: async (data: Partial<Product>) => {
+      if (editingProduct) {
+        const updated = await updateProduct(editingProduct.id, data);
+        if (selectedBranchId && data.basePrice !== undefined) {
+          try {
+            await setProductBranchPrice(editingProduct.id, selectedBranchId, data.basePrice);
+          } catch (e) {
+            console.error('Failed to sync branch price on update:', e);
+          }
+        }
+        return updated;
+      }
+      const created = await createProduct(data);
+      if (selectedBranchId && data.basePrice !== undefined && created?.id) {
+        try {
+          await setProductBranchPrice(created.id, selectedBranchId, data.basePrice);
+        } catch (e) {
+          console.error('Failed to set branch price on create:', e);
+        }
+      }
+      return created;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['salesProductsBranchPrices'] });
+      queryClient.invalidateQueries({ queryKey: ['products50'] });
       setIsProductModalOpen(false);
     }
   });
@@ -373,6 +407,7 @@ const ProductsPage: React.FC = () => {
                 filteredProducts.map((p: any, idx: number) => {
                   const fullProductName = p.name || '--';
                   const displayProductName = fullProductName.length > 25 ? `${fullProductName.slice(0, 25)}...` : fullProductName;
+                  const sellingPrice = getProductSellingPrice(p);
 
                   return (
                     <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -412,7 +447,7 @@ const ProductsPage: React.FC = () => {
                         {p.importPrice ? formatNumber(p.importPrice) + ' ₫' : <span style={{ color: '#94a3b8' }}>--</span>}
                       </td>
                       <td style={{ padding: '1rem', textAlign: 'right', color: '#059669', fontWeight: 600, fontSize: '0.85rem' }}>
-                        {p.basePrice ? formatNumber(p.basePrice) + ' ₫' : <span style={{ color: '#94a3b8' }}>--</span>}
+                        {sellingPrice !== undefined ? formatNumber(sellingPrice) + ' ₫' : <span style={{ color: '#94a3b8' }}>--</span>}
                       </td>
                       <td style={{ padding: '1rem', textAlign: 'center', color: '#1e293b', fontWeight: 500 }}>{Number(p.quantity ?? 0)}</td>
                       <td style={{ padding: '1rem' }}>

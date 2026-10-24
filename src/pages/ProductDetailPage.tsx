@@ -225,8 +225,22 @@ const ProductDetailPage: React.FC = () => {
     );
   }
 
+  const getProductSellingPrice = (p: Product): number | undefined => {
+    if (selectedBranchId && p.branchPrices && p.branchPrices.length > 0) {
+      const bp = p.branchPrices.find((item) => item.branchId === selectedBranchId);
+      if (bp && bp.price !== undefined && bp.price !== null && Number.isFinite(Number(bp.price)) && Number(bp.price) >= 0) {
+        return Number(bp.price);
+      }
+    }
+    const defaultPrice = p.basePrice ?? p.sellingPrice ?? p.salePrice ?? p.price;
+    return defaultPrice !== undefined && defaultPrice !== null && Number.isFinite(Number(defaultPrice))
+      ? Number(defaultPrice)
+      : undefined;
+  };
+
   const totalImported = history.reduce((sum, item) => sum + item.quantity, 0);
   const totalValue = history.reduce((sum, item) => sum + item.total, 0);
+  const sellingPrice = getProductSellingPrice(product);
 
   return (
     <div style={{ padding: '0.75rem', backgroundColor: '#f8fafc', minHeight: '100%' }}>
@@ -269,12 +283,18 @@ const ProductDetailPage: React.FC = () => {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '0.75rem', marginBottom: '0.75rem' }}>
         <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.5rem', padding: '0.7rem 0.9rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontWeight: 700, marginBottom: '0.2rem', fontSize: '0.85rem' }}>
             <DollarSign size={14} color="#f59e0b" /> Giá nhập
           </div>
-          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1e293b' }}>{formatCurrency(Number(product.importPrice ?? product.basePrice ?? 0))}</div>
+          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1e293b' }}>{formatCurrency(Number(product.importPrice ?? 0))}</div>
+        </div>
+        <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.5rem', padding: '0.7rem 0.9rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontWeight: 700, marginBottom: '0.2rem', fontSize: '0.85rem' }}>
+            <DollarSign size={14} color="#10b981" /> Giá bán
+          </div>
+          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#059669' }}>{sellingPrice !== undefined ? formatCurrency(sellingPrice) : '--'}</div>
         </div>
         <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.5rem', padding: '0.7rem 0.9rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontWeight: 700, marginBottom: '0.2rem', fontSize: '0.85rem' }}>
@@ -284,7 +304,7 @@ const ProductDetailPage: React.FC = () => {
         </div>
         <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '0.5rem', padding: '0.7rem 0.9rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#64748b', fontWeight: 700, marginBottom: '0.2rem', fontSize: '0.85rem' }}>
-            <Building2 size={14} color="#10b981" /> Tổng giá trị nhập
+            <Building2 size={14} color="#6366f1" /> Tổng giá trị nhập
           </div>
           <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1e293b' }}>{formatCurrency(totalValue)}</div>
         </div>

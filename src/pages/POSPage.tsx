@@ -298,7 +298,7 @@ const POSPage: React.FC = () => {
   const handleSelectCustomer = (customer: Customer) => {
     setSelectedCustomer(customer);
     setCustomerName(customer.fullName);
-    setCustomerPhone(customer.phone);
+    setCustomerPhone(customer.phone || '');
     setCustomerSearch('');
   };
 
@@ -374,7 +374,7 @@ const POSPage: React.FC = () => {
     onSuccess: (data) => {
       setSelectedCustomer(data);
       setCustomerName(data.fullName);
-      setCustomerPhone(data.phone);
+      setCustomerPhone(data.phone || '');
       setAddress(data.address || '');
       // If notes has location prefix
       if (data.notes && data.notes.startsWith('Location: ')) {
@@ -395,14 +395,14 @@ const POSPage: React.FC = () => {
 
   const handleQuickAddCustomerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quickCustomerName.trim() || !quickCustomerPhone.trim()) {
-      alert('Vui lòng điền đầy đủ tên và số điện thoại!');
+    if (!quickCustomerName.trim()) {
+      alert('Vui lòng điền tên khách hàng!');
       return;
     }
     
     const payload: Partial<Customer> = {
-      fullName: quickCustomerName,
-      phone: quickCustomerPhone,
+      fullName: quickCustomerName.trim(),
+      phone: quickCustomerPhone.trim() || null,
       address: quickCustomerAddress,
       notes: quickCustomerLocation ? `Location: ${quickCustomerLocation}` : undefined
     };
@@ -1400,13 +1400,12 @@ const POSPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label style={labelStyle}>Số điện thoại *</label>
+                  <label style={labelStyle}>Số điện thoại</label>
                   <input 
                     type="tel" 
                     placeholder="Nhập số điện thoại..." 
                     value={quickCustomerPhone}
                     onChange={(e) => setQuickCustomerPhone(e.target.value)}
-                    required
                     style={inputStyle}
                   />
                 </div>

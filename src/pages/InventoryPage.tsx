@@ -145,6 +145,13 @@ const InventoryPage: React.FC = () => {
     const matchesPersonnel = !personnelFilter || order.personnelName?.toLowerCase().includes(personnelFilter.toLowerCase());
 
     return matchesSearch && matchesStatus && matchesSupplier && matchesPersonnel;
+  }).sort((a, b) => {
+    const dateA = Date.parse(a.importDate || a.createdAt || '');
+    const dateB = Date.parse(b.importDate || b.createdAt || '');
+
+    if (!Number.isFinite(dateA)) return Number.isFinite(dateB) ? 1 : 0;
+    if (!Number.isFinite(dateB)) return -1;
+    return dateB - dateA;
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / limit));

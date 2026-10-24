@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Search, 
   ShoppingCart, 
@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 
 
-import { createProduct, getInventorySummary, getCategories, getProducts, type Product } from '../api/inventory';
+import { createProduct, getAvailableImeis, getInventorySummary, getCategories, getProducts, type Product } from '../api/inventory';
 import { searchCustomers, createCustomer, type Customer } from '../api/customers';
 import { createOrder, type CreateOrderPayload } from '../api/orders';
 import { getDashboardStatistics, type DashboardStatisticsResponse } from '../api/dashboard';
@@ -36,6 +36,7 @@ interface CartItem {
   product: Product;
   quantity: number;
   unitPrice: number;
+  imeis?: string[];
 }
 
 const SalesPage: React.FC = () => {
@@ -79,6 +80,21 @@ const SalesPage: React.FC = () => {
     queryFn: () => getProducts({ isService: false, limit: 10000 }),
     enabled: !!selectedBranchId,
   });
+
+  const imeiTrackedCart = cart.filter(item => item.product.hasImei);
+  const availableImeisQueries = useQueries({
+    queries: imeiTrackedCart.map(item => ({
+      queryKey: ['availableProductImeis', selectedBranchId, item.product.id],
+      queryFn: () => getAvailableImeis(item.product.id),
+      enabled: !!selectedBranchId,
+    })),
+  });
+  const availableImeisByProductId = new Map(
+    imeiTrackedCart.map((item, index) => [
+      item.product.id,
+      availableImeisQueries[index]?.data || [],
+    ]),
+  );
 
   // Get product categories
   const { data: categories = [] } = useQuery({
@@ -222,10 +238,22 @@ const SalesPage: React.FC = () => {
         return;
       }
       const updated = [...cart];
-      updated[existingIndex].quantity += 1;
+      const existingItem = updated[existingIndex];
+      existingItem.quantity += 1;
+      if (existingItem.product.hasImei) {
+        existingItem.imeis = [...(existingItem.imeis || []), ''];
+      }
       setCart(updated);
     } else {
-      setCart([...cart, { product, quantity: 1, unitPrice: price }]);
+      setCart([
+        ...cart,
+        {
+          product,
+          quantity: 1,
+          unitPrice: price,
+          ...(product.hasImei ? { imeis: [''] } : {}),
+        },
+      ]);
     }
   };
 
@@ -238,7 +266,24 @@ const SalesPage: React.FC = () => {
       alert(`Không thể vượt quá số lượng tồn kho: ${maxStock}`);
       return;
     }
-    setCart(cart.map(item => item.product.id === productId ? { ...item, quantity: qty } : item));
+    setCart(cart.map(item => item.product.id === productId
+      ? {
+          ...item,
+          quantity: qty,
+          ...(item.product.hasImei
+            ? { imeis: Array.from({ length: qty }, (_, index) => item.imeis?.[index] || '') }
+            : {}),
+        }
+      : item));
+  };
+
+  const handleSelectImei = (productId: string, index: number, imei: string) => {
+    setCart(cart.map(item => {
+      if (item.product.id !== productId) return item;
+      const imeis = [...(item.imeis || Array(item.quantity).fill(''))];
+      imeis[index] = imei;
+      return { ...item, imeis };
+    }));
   };
 
   const handleRemoveFromCart = (productId: string) => {
@@ -247,13 +292,13 @@ const SalesPage: React.FC = () => {
 
   const handleQuickCustomerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quickName.trim() || !quickPhone.trim()) {
-      alert('Vui lòng điền đủ Tên và Số điện thoại!');
+    if (!quickName.trim()) {
+      alert('Vui lòng điền Tên khách hàng!');
       return;
     }
     createCustomerMutation.mutate({
       fullName: quickName.trim(),
-      phone: quickPhone.trim(),
+      phone: quickPhone.trim() || null,
       address: quickAddress.trim(),
     });
   };
@@ -267,12 +312,21 @@ const SalesPage: React.FC = () => {
       alert('Giỏ hàng đang trống!');
       return;
     }
+    const incompleteImeiItem = cart.find(item =>
+      item.product.hasImei &&
+      (item.imeis?.length !== item.quantity || item.imeis.some(imei => !imei)),
+    );
+    if (incompleteImeiItem) {
+      alert(`Vui lòng chọn IMEI cho từng chiếc của sản phẩm "${incompleteImeiItem.product.name}".`);
+      return;
+    }
 
     const payload: CreateOrderPayload = {
       items: cart.map(item => ({
         productId: item.product.id,
         quantity: item.quantity,
-        unitPrice: item.unitPrice
+        unitPrice: item.unitPrice,
+        ...(item.product.hasImei ? { imeis: item.imeis } : {}),
       })),
       discount: discount,
       paymentMethod: paymentMethod,
@@ -692,10 +746,9 @@ const SalesPage: React.FC = () => {
               />
               <input 
                 type="tel" 
-                placeholder="Số điện thoại *"
+                placeholder="Số điện thoại"
                 value={quickPhone}
                 onChange={(e) => setQuickPhone(e.target.value)}
-                required
                 style={{ width: '100%', padding: '0.4rem 0.6rem', border: '1px solid #cbd5e1', borderRadius: '0.25rem', fontSize: '0.8rem', outline: 'none' }}
               />
               <input 
@@ -967,6 +1020,40 @@ const SalesPage: React.FC = () => {
                       {formatCurrency(item.quantity * item.unitPrice)}
                     </div>
                   </div>
+
+                  {item.product.hasImei && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>IMEI từng sản phẩm</span>
+                      {Array.from({ length: item.quantity }, (_, index) => {
+                        const availableImeis = availableImeisByProductId.get(item.product.id) || [];
+                        const selectedForOtherUnits = (item.imeis || []).filter((imei, imeiIndex) => imei && imeiIndex !== index);
+                        const query = availableImeisQueries[imeiTrackedCart.findIndex(cartItem => cartItem.product.id === item.product.id)];
+                        return (
+                          <select
+                            key={`${item.product.id}-imei-${index}`}
+                            value={item.imeis?.[index] || ''}
+                            onChange={(event) => handleSelectImei(item.product.id, index, event.target.value)}
+                            disabled={query?.isLoading || query?.isError}
+                            style={{ width: '100%', padding: '0.45rem 0.55rem', border: '1px solid #cbd5e1', borderRadius: '0.375rem', fontSize: '0.8rem', backgroundColor: 'white' }}
+                          >
+                            <option value="">
+                              {query?.isLoading
+                                ? 'Đang tải IMEI...'
+                                : query?.isError
+                                  ? 'Không tải được IMEI'
+                                  : availableImeis.length === 0
+                                    ? 'Không có IMEI khả dụng'
+                                    : `Chọn IMEI cho chiếc ${index + 1}`}
+                            </option>
+                            {availableImeis
+                              .filter(imei => !selectedForOtherUnits.includes(imei))
+                              .map(imei => <option key={imei} value={imei}>{imei}</option>)}
+                          </select>
+                        );
+                      })}
+                    </div>
+                  )}
+
                 </div>
               );
             })

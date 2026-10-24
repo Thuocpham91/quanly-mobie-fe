@@ -23,7 +23,7 @@ import {
   Trash2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { getOrders, updateOrderStatus, updateOrderDate, updateOrder, getOrderById, importOrdersExcel, importOrderDetailsExcel, type Order, type UpdateOrderPayload } from '../api/orders';
+import { getOrders, updateOrderStatus, updateOrderDate, updateOrder, deleteOrder, getOrderById, importOrdersExcel, importOrderDetailsExcel, type Order, type UpdateOrderPayload } from '../api/orders';
 import { getProductsPaginated, type Product } from '../api/inventory';
 import { searchCustomers } from '../api/customers';
 import Pagination from '../components/Pagination';
@@ -173,6 +173,22 @@ const SalesOrdersPage: React.FC = () => {
     onError: (err: any) => {
       console.error(err);
       alert(err.response?.data?.message || err.message || 'Không thể cập nhật đơn hàng.');
+    },
+  });
+
+  const deleteOrderMutation = useMutation({
+    mutationFn: deleteOrder,
+    onSuccess: (_, orderId) => {
+      queryClient.invalidateQueries({ queryKey: ['salesOrders'] });
+      queryClient.invalidateQueries({ queryKey: ['salesOrderDetail', orderId] });
+      queryClient.invalidateQueries({ queryKey: ['inventorySummary'] });
+      queryClient.invalidateQueries({ queryKey: ['inventoryBatches'] });
+      setSelectedOrder((current) => current?.id === orderId ? null : current);
+      alert('Đã xóa đơn hàng và hoàn lại tồn kho.');
+    },
+    onError: (error: any) => {
+      console.error(error);
+      alert(error.response?.data?.message || error.message || 'Không thể xóa đơn hàng.');
     },
   });
 
@@ -690,6 +706,20 @@ const SalesOrdersPage: React.FC = () => {
                         style={{ padding: '0.4rem', border: 'none', borderRadius: '0.375rem', cursor: 'pointer', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: '#059669', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                       >
                         <Pencil size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`Xóa đơn ${order.orderCode}? Tồn kho đã trừ bởi đơn này sẽ được hoàn lại.`)) {
+                            deleteOrderMutation.mutate(order.id);
+                          }
+                        }}
+                        disabled={deleteOrderMutation.isPending}
+                        title="Xóa đơn hàng và hoàn tồn kho"
+                        aria-label={`Xóa đơn hàng ${order.orderCode}`}
+                        style={{ padding: '0.4rem', border: 'none', borderRadius: '0.375rem', cursor: deleteOrderMutation.isPending ? 'not-allowed' : 'pointer', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#dc2626', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', opacity: deleteOrderMutation.isPending ? 0.6 : 1 }}
+                      >
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </td>

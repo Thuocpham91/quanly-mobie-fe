@@ -40,7 +40,7 @@ const AppointmentsPage: React.FC = () => {
     const matchesSearch = 
       appt.purpose.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (appt.customer && appt.customer.fullName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (appt.customer && appt.customer.phone.includes(searchTerm));
+      (appt.customer?.phone?.includes(searchTerm) ?? false);
       
     const matchesStatus = statusFilter === 'ALL' || appt.status === statusFilter;
     

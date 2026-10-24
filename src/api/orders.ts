@@ -6,11 +6,12 @@ export interface OrderItem {
   productId: string;
   quantity: number;
   unitPrice: number;
+  imeis?: string[];
   product?: Product;
 }
 
 export interface CreateOrderPayload {
-  items: { productId: string; quantity: number; unitPrice: number }[];
+  items: { productId: string; quantity: number; unitPrice: number; imeis?: string[] }[];
   discount?: number;
   paymentMethod?: 'CASH' | 'TRANSFER' | 'CARD';
   customerId?: string;
@@ -23,7 +24,7 @@ export interface CreateOrderPayload {
 
 export type UpdateOrderPayload = Omit<Partial<CreateOrderPayload>, 'customerId' | 'items'> & {
   customerId?: string | null;
-  items?: { productId: string; quantity: number; unitPrice: number }[];
+  items?: { productId: string; quantity: number; unitPrice: number; imeis?: string[] }[];
 };
 
 export interface Order {
@@ -214,4 +215,8 @@ export const updateOrderDate = async (id: string, createdAt: string): Promise<Or
 export const updateOrder = async (id: string, payload: UpdateOrderPayload): Promise<Order> => {
   const response = await api.patch(`/orders/${id}`, payload);
   return response.data;
+};
+
+export const deleteOrder = async (id: string): Promise<void> => {
+  await api.delete(`/orders/${id}`);
 };

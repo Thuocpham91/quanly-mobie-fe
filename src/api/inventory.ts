@@ -175,8 +175,17 @@ export const getProducts = async (context?: any): Promise<Product[]> => {
 export const getNextProductCode = async (): Promise<string> => {
   try {
     const response = await client.get<any>('/products/next-code');
-    return response.data?.code || '';
+    const code = response.data?.code;
+    if (!code) return '';
+
+    const sequence = String(code).match(/\d+$/)?.[0];
+    if (!sequence) {
+      throw new Error(`Invalid next product code received: ${code}`);
+    }
+
+    return `SP-${sequence.padStart(4, '0')}`;
   } catch (error) {
+    console.error('Failed to get next product code:', error);
     return '';
   }
 };
@@ -197,9 +206,47 @@ export const getProductsPaginated = async (page = 1, limit = 10, isService?: boo
 };
 
 // Category APIs
-export const getCategories = async () => {
-  const response = await client.get<any>('/categories');
-  return response.data?.data || response.data || [];
+const getAllLookupItems = async <T extends { id: string }>(endpoint: string): Promise<T[]> => {
+  const limit = 100;
+  const firstResponse = await client.get<any>(endpoint, { params: { page: 1, limit } });
+  const firstPayload = firstResponse.data;
+  const firstItems: T[] = Array.isArray(firstPayload) ? firstPayload : firstPayload?.data;
+
+  if (!Array.isArray(firstItems)) {
+    throw new Error(`Invalid list response from ${endpoint}`);
+  }
+  if (Array.isArray(firstPayload)) return firstItems;
+
+  const totalPages = Number(firstPayload?.meta?.totalPages);
+  const lastPage = Number.isFinite(totalPages) && totalPages > 0 ? Math.ceil(totalPages) : Infinity;
+  const items = [...firstItems];
+  const itemIds = new Set(firstItems.map((item) => item.id));
+
+  for (let page = 2; page <= lastPage; page += 1) {
+    const response = await client.get<any>(endpoint, { params: { page, limit } });
+    const payload = response.data;
+    const pageItems: T[] = Array.isArray(payload) ? payload : payload?.data;
+
+    if (!Array.isArray(pageItems)) {
+      throw new Error(`Invalid list response from ${endpoint} on page ${page}`);
+    }
+    if (pageItems.length === 0) break;
+
+    const newItems = pageItems.filter((item) => !itemIds.has(item.id));
+    if (newItems.length === 0) {
+      throw new Error(`Pagination did not return new items from ${endpoint} on page ${page}`);
+    }
+
+    items.push(...newItems);
+    newItems.forEach((item) => itemIds.add(item.id));
+    if (pageItems.length < limit) break;
+  }
+
+  return items;
+};
+
+export const getCategories = async (): Promise<Category[]> => {
+  return getAllLookupItems<Category>('/categories');
 };
 
 export const createCategory = async (data: Partial<Category>) => {
@@ -217,9 +264,8 @@ export const deleteCategory = async (id: string) => {
 };
 
 // Item Group APIs
-export const getItemGroups = async () => {
-  const response = await client.get<any>('/item-groups');
-  return response.data?.data || response.data || [];
+export const getItemGroups = async (): Promise<ItemGroup[]> => {
+  return getAllLookupItems<ItemGroup>('/item-groups');
 };
 
 export const createItemGroup = async (data: Partial<ItemGroup>) => {
@@ -237,9 +283,8 @@ export const deleteItemGroup = async (id: string) => {
 };
 
 // Classification APIs
-export const getClassifications = async () => {
-  const response = await client.get<any>('/classifications');
-  return response.data?.data || response.data || [];
+export const getClassifications = async (): Promise<Classification[]> => {
+  return getAllLookupItems<Classification>('/classifications');
 };
 
 export const createClassification = async (data: Partial<Classification>) => {
@@ -334,6 +379,11 @@ export const getInventorySummary = async (branchId?: string) => {
   const url = branchId ? `/inventory/summary?branchId=${branchId}` : '/inventory/summary';
   const response = await client.get<any>(url);
   return response.data?.data || response.data || [];
+};
+
+export const getAvailableImeis = async (productId: string): Promise<string[]> => {
+  const response = await client.get<string[]>(`/inventory/products/${productId}/available-imeis`);
+  return response.data;
 };
 
 export const getInventoryBatches = async (branchId?: string, page = 1, limit = 10, productId?: string) => {

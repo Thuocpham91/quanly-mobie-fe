@@ -64,6 +64,8 @@ const ProductPricesPage: React.FC = () => {
       inventoryApi.updateProduct(data.id, { basePrice: data.basePrice }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products50'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['salesProductsBranchPrices'] });
     }
   });
 
@@ -72,6 +74,8 @@ const ProductPricesPage: React.FC = () => {
       inventoryApi.setProductBranchPrice(data.productId, data.branchId, data.price),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products50'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['salesProductsBranchPrices'] });
     }
   });
 
@@ -80,6 +84,8 @@ const ProductPricesPage: React.FC = () => {
       inventoryApi.deleteProductBranchPrice(data.productId, data.branchId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products50'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['salesProductsBranchPrices'] });
     }
   });
 

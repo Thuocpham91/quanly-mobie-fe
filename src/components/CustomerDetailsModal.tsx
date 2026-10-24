@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, User, Phone, Mail, MapPin, Wallet, Plus, Calendar, Dog, Edit, Trash2, CheckCircle, XCircle, FileText, ShoppingBag, Clock } from 'lucide-react';
 import { type Customer, topUpWallet } from '../api/customers';
 import { getCustomerAppointments, createAppointment, updateAppointment } from '../api/appointments';
-import { getOrders } from '../api/orders';
+import { getOrderById, getOrders, type Order } from '../api/orders';
 import AppointmentModal from './AppointmentModal';
 import { ClipboardList } from 'lucide-react';
 import { useBranchContext } from '../context/BranchContext';
@@ -23,6 +23,7 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
   // Modals visibility
   const [isApptModalOpen, setIsApptModalOpen] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState<any>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   // Topup variable
   const [showTopup, setShowTopup] = useState(false);
@@ -42,6 +43,16 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
       return res.data;
     },
     enabled: isOpen,
+  });
+
+  const {
+    data: selectedOrder,
+    isLoading: loadingSelectedOrder,
+    isError: hasSelectedOrderError,
+  } = useQuery({
+    queryKey: ['customerOrderDetail', selectedOrderId],
+    queryFn: () => getOrderById(selectedOrderId!),
+    enabled: Boolean(selectedOrderId),
   });
 
   const { data: serviceOrders, isLoading: loadingServices } = useQuery({
@@ -378,7 +389,17 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                                   Ngày mua: {orderDate.toLocaleDateString('vi-VN')} {orderDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                                 </div>
                                 <div style={{ fontSize: '0.875rem', color: '#64748b', marginTop: '0.15rem' }}>
-                                  Mã HĐ: <strong style={{ color: '#6366f1' }}>{order.orderCode}</strong>
+                                  Mã HĐ:{' '}
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedOrderId(order.id)}
+                                    style={{
+                                      padding: 0, border: 'none', background: 'none', color: '#6366f1',
+                                      fontWeight: 700, cursor: 'pointer', textDecoration: 'underline',
+                                    }}
+                                  >
+                                    {order.orderCode}
+                                  </button>
                                 </div>
                               </div>
                               <div style={{ textAlign: 'right' }}>
@@ -563,7 +584,19 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px dashed var(--border)', paddingBottom: '0.75rem' }}>
                               <div>
                                 <div style={{ fontWeight: '700', color: '#1e293b', fontSize: '1rem' }}>Ngày: {orderDate.toLocaleDateString('vi-VN')}</div>
-                                <div style={{ fontSize: '0.875rem', color: '#64748b' }}>Mã HĐ: {order.orderCode}</div>
+                                <div style={{ fontSize: '0.875rem', color: '#64748b' }}>
+                                  Mã HĐ:{' '}
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedOrderId(order.id)}
+                                    style={{
+                                      padding: 0, border: 'none', background: 'none', color: '#6366f1',
+                                      fontWeight: 700, cursor: 'pointer', textDecoration: 'underline',
+                                    }}
+                                  >
+                                    {order.orderCode}
+                                  </button>
+                                </div>
                               </div>
                               <div style={{ textAlign: 'right' }}>
                                 <span style={{
@@ -610,8 +643,146 @@ const CustomerDetailsModal: React.FC<CustomerDetailsModalProps> = ({ isOpen, onC
         appointment={selectedAppt}
       />
 
+      {selectedOrderId && (
+        <div
+          role="presentation"
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1200, padding: '1rem',
+            backgroundColor: 'rgba(15, 23, 42, 0.6)', display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="customer-invoice-title"
+            style={{
+              width: '100%', maxWidth: '680px', maxHeight: '85vh', overflowY: 'auto',
+              backgroundColor: 'white', borderRadius: '0.75rem',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
+            }}
+          >
+            <header style={{
+              padding: '1.25rem', borderBottom: '1px solid #e2e8f0',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              backgroundColor: '#f8fafc',
+            }}>
+              <div>
+                <h3 id="customer-invoice-title" style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#1e293b' }}>
+                  Chi tiết hóa đơn{selectedOrder ? `: ${selectedOrder.orderCode}` : ''}
+                </h3>
+                {selectedOrder && (
+                  <div style={{ marginTop: '0.25rem', color: '#64748b', fontSize: '0.8rem' }}>
+                    Ngày hóa đơn: {new Date(selectedOrder.createdAt).toLocaleString('vi-VN')}
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                aria-label="Đóng chi tiết hóa đơn"
+                onClick={() => setSelectedOrderId(null)}
+                style={{ padding: '0.25rem', border: 'none', background: 'none', color: '#64748b', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </header>
+
+            {loadingSelectedOrder ? (
+              <div role="status" style={{ padding: '3rem', textAlign: 'center', color: '#64748b' }}>
+                Đang tải chi tiết hóa đơn...
+              </div>
+            ) : hasSelectedOrderError || !selectedOrder ? (
+              <div role="alert" style={{ padding: '3rem', textAlign: 'center', color: '#dc2626' }}>
+                Không thể tải chi tiết hóa đơn. Vui lòng thử lại.
+              </div>
+            ) : (
+              <OrderInvoiceDetails order={selectedOrder} formatCurrency={formatCurrency} />
+            )}
+          </section>
+        </div>
+      )}
+
     </div>
   );
 };
+
+const OrderInvoiceDetails: React.FC<{ order: Order; formatCurrency: (value: number) => string }> = ({ order, formatCurrency }) => (
+  <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+    <div style={{
+      display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+      gap: '0.75rem', padding: '0.875rem', borderRadius: '0.5rem', backgroundColor: '#f8fafc',
+    }}>
+      <div>
+        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Khách hàng</div>
+        <strong style={{ color: '#1e293b' }}>{order.customer?.fullName || 'Khách lẻ'}</strong>
+      </div>
+      <div>
+        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Trạng thái</div>
+        <strong style={{ color: '#1e293b' }}>{order.status}</strong>
+      </div>
+      <div>
+        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Thanh toán</div>
+        <strong style={{ color: '#1e293b' }}>{order.paymentMethod}</strong>
+      </div>
+    </div>
+
+    <div>
+      <h4 style={{ margin: '0 0 0.5rem', fontSize: '0.9rem', color: '#334155' }}>Sản phẩm / Dịch vụ</h4>
+      {order.items?.length ? (
+        <div style={{ border: '1px solid #e2e8f0', borderRadius: '0.5rem', overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+            <thead style={{ backgroundColor: '#f8fafc', color: '#64748b' }}>
+              <tr>
+                <th style={{ padding: '0.65rem' }}>Sản phẩm</th>
+                <th style={{ padding: '0.65rem', textAlign: 'center' }}>SL</th>
+                <th style={{ padding: '0.65rem', textAlign: 'right' }}>Đơn giá</th>
+                <th style={{ padding: '0.65rem', textAlign: 'right' }}>Thành tiền</th>
+              </tr>
+            </thead>
+            <tbody>
+              {order.items.map((item, index) => (
+                <tr key={`${item.productId}-${index}`} style={{ borderTop: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '0.65rem', fontWeight: 600, color: '#1e293b' }}>
+                    {item.product?.name || 'Sản phẩm đã xóa'}
+                  </td>
+                  <td style={{ padding: '0.65rem', textAlign: 'center' }}>{item.quantity}</td>
+                  <td style={{ padding: '0.65rem', textAlign: 'right' }}>{formatCurrency(item.unitPrice)}</td>
+                  <td style={{ padding: '0.65rem', textAlign: 'right', fontWeight: 600 }}>
+                    {formatCurrency(item.quantity * item.unitPrice)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div style={{ padding: '1rem', color: '#64748b' }}>Hóa đơn không có sản phẩm.</div>
+      )}
+    </div>
+
+    {order.notes && (
+      <div style={{ padding: '0.75rem', borderRadius: '0.5rem', backgroundColor: '#fffbeb', color: '#78350f' }}>
+        <strong>Ghi chú:</strong> {order.notes}
+      </div>
+    )}
+
+    <div style={{
+      alignSelf: 'flex-end', width: 'min(100%, 260px)', display: 'flex', flexDirection: 'column',
+      gap: '0.45rem', borderTop: '1px solid #e2e8f0', paddingTop: '0.75rem',
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '0.85rem' }}>
+        <span>Tạm tính:</span><strong style={{ color: '#1e293b' }}>{formatCurrency(order.subTotal)}</strong>
+      </div>
+      {Number(order.discount) > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#dc2626', fontSize: '0.85rem' }}>
+          <span>Chiết khấu:</span><strong>-{formatCurrency(order.discount)}</strong>
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1rem', fontWeight: 800, color: '#1e293b' }}>
+        <span>Tổng tiền:</span><span style={{ color: '#6366f1' }}>{formatCurrency(order.totalAmount)}</span>
+      </div>
+    </div>
+  </div>
+);
 
 export default CustomerDetailsModal;
